@@ -1,6 +1,7 @@
 {
   "scripts": {
-    "start": "node server.mjs"
+    "start": "node server.mjs",
+    "restart": "start-dashboard.cmd"
   },
   "private": true,
   "type": "module"

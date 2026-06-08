@@ -92,6 +92,17 @@ function buildEndpoints(shopId) {
         with: ["items", "buyer", "payment"],
       },
     },
+    customers: {
+      label: "Customers",
+      path: `/shops/${shopId}/customers`,
+      fallback: { customers: [], total: 0 },
+      query: {
+        offset: 0,
+        limit: 100,
+        sortBy: "updated_at",
+        sortDesc: "true",
+      },
+    },
     shopAnalytics: {
       label: "30-day shop analytics",
       path: `/shops/me/${shopId}`,
@@ -180,6 +191,22 @@ export const ARTICLE_UPDATE_FIELDS = new Set([
   "schedule_at",
   "faqs",
   "structures",
+]);
+
+export const CUSTOMER_UPDATE_FIELDS = new Set([
+  "name",
+  "email",
+  "phone",
+  "level",
+  "subscribed",
+  "currency",
+  "segments",
+  "birthday",
+  "sex",
+  "country",
+  "address",
+  "billing",
+  "notes",
 ]);
 
 export const AUTH_DIR = join(ROOT, ".auth");

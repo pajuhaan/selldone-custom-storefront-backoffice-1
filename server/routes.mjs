@@ -17,8 +17,8 @@ import {
   sanitizeProductUpdatePayload,
   selldoneApiRequest,
   sendProfileAvatar,
-  userProfilePayload,
 } from "./selldone-api.mjs";
+import { handleCustomerRoutes } from "./features/customers.mjs";
 import { serveStatic } from "./static.mjs";
 import { handleStorefrontApi } from "./storefront-api.mjs";
 import { handleSetupRoutes, shouldRedirectToSetup } from "../setup/setup-routes.mjs";
@@ -59,10 +59,13 @@ export function createRequestHandler() {
         const session = getSession(req, res);
         let authenticated = false;
         let user = fallbackUserProfile();
+        let accessToken = "";
+        let tokenExpiresAt = 0;
         try {
-          authenticated = Boolean(await ensureAccessToken(session));
+          accessToken = await ensureAccessToken(session);
+          authenticated = Boolean(accessToken);
           if (authenticated) {
-            user = await userProfilePayload(session);
+            tokenExpiresAt = Number(session.tokens?.expires_at || 0);
           }
         } catch {
           authenticated = false;
@@ -74,6 +77,11 @@ export function createRequestHandler() {
           shop: SHOP,
           user,
           scopes: SCOPES,
+          apiBaseUrl: API_BASE,
+          endpoints: publicEndpointConfig(),
+          accessToken,
+          tokenExpiresAt,
+          tokenType: authenticated ? "Bearer" : "",
         });
         return;
       }
@@ -87,7 +95,7 @@ export function createRequestHandler() {
       if (url.pathname === "/api/debug/endpoints") {
         sendJson(res, 200, {
           apiBaseUrl: API_BASE,
-          authorization: "Bearer token is sent server-side only",
+          authorization: "Dashboard reads the access token from /api/session and calls Selldone directly in the browser.",
           endpoints: publicEndpointConfig(),
         });
         return;
@@ -166,6 +174,8 @@ export function createRequestHandler() {
         });
         return;
       }
+
+      if (await handleCustomerRoutes(req, res, url)) return;
 
       if (url.pathname === "/api/blogs" && req.method === "POST") {
         const session = getSession(req, res);
@@ -311,6 +321,11 @@ export function createRequestHandler() {
           return;
         }
         sendJson(res, 200, await dashboardPayload(session));
+        return;
+      }
+
+      if (url.pathname.startsWith("/api/")) {
+        sendJson(res, 404, { error: "Dashboard API route not found", path: url.pathname });
         return;
       }
 

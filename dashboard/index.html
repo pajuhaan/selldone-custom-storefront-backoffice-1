@@ -67,6 +67,11 @@
             <span>Orders</span>
             <span id="navOrderBadge" class="nav-badge">0</span>
           </a>
+          <a class="nav-link" href="#customers" data-view="customers">
+            <i class="bi bi-people" aria-hidden="true"></i>
+            <span>Customers</span>
+            <span id="navCustomerBadge" class="nav-badge">0</span>
+          </a>
           <a class="nav-link" href="#products" data-view="products">
             <i class="bi bi-box-seam" aria-hidden="true"></i>
             <span>Products</span>
@@ -118,7 +123,7 @@
         <header class="topbar">
           <div class="global-search" role="search">
             <i class="bi bi-search" aria-hidden="true"></i>
-            <input id="globalSearchInput" type="search" placeholder="Search orders, products, blog posts..." />
+            <input id="globalSearchInput" type="search" placeholder="Search customers, orders, products, blog posts..." />
           </div>
 
           <div class="topbar-actions">
@@ -245,6 +250,7 @@
             <button class="view-tab active" type="button" data-view-tab="overview"><i class="bi bi-house-door-fill"></i>Dashboard</button>
             <button class="view-tab" type="button" data-view-tab="suite"><i class="bi bi-app-indicator"></i>Suite</button>
             <button class="view-tab" type="button" data-view-tab="orders"><i class="bi bi-credit-card-2-front-fill"></i>Orders</button>
+            <button class="view-tab" type="button" data-view-tab="customers"><i class="bi bi-people-fill"></i>Customers</button>
             <button class="view-tab" type="button" data-view-tab="products"><i class="bi bi-cube-fill"></i>Products</button>
             <button class="view-tab" type="button" data-view-tab="blog"><i class="bi bi-journal-richtext"></i>Blog</button>
             <button class="view-tab" type="button" data-view-tab="marketing"><i class="bi bi-megaphone-fill"></i>Marketing</button>
@@ -433,6 +439,98 @@
                 <div id="orderTimeline" class="timeline-list"></div>
               </article>
             </div>
+          </section>
+
+          <section class="view-panel" data-view-panel="customers">
+            <div id="customerKpis" class="kpi-grid"></div>
+
+            <div class="customers-layout">
+              <article class="panel-card span-2">
+                <div class="panel-header product-header">
+                  <div>
+                    <h2>Customers</h2>
+                    <p>Live customer records from Selldone backoffice API.</p>
+                  </div>
+                  <div class="catalog-controls">
+                    <div class="table-search">
+                      <i class="bi bi-search" aria-hidden="true"></i>
+                      <input id="customerSearchInput" type="search" placeholder="Search name, email, phone, segment" />
+                    </div>
+                    <select id="customerLevelFilter" class="filter-select" aria-label="Customer level filter">
+                      <option value="all">All levels</option>
+                      <option value="BRONZE">Bronze</option>
+                      <option value="SILVER">Silver</option>
+                      <option value="GOLD">Gold</option>
+                      <option value="PLATINUM">Platinum</option>
+                      <option value="DIAMOND">Diamond</option>
+                    </select>
+                    <select id="customerStatusFilter" class="filter-select" aria-label="Customer status filter">
+                      <option value="all">All customers</option>
+                      <option value="subscribed">Subscribed</option>
+                      <option value="banned">Banned</option>
+                      <option value="no-access">No access</option>
+                    </select>
+                    <button id="refreshCustomersButton" class="btn btn-soft" type="button">
+                      <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+                      <span>Refresh Customers</span>
+                    </button>
+                  </div>
+                </div>
+                <div class="table-responsive">
+                  <table class="table data-table">
+                    <thead>
+                      <tr>
+                        <th>Customer</th>
+                        <th>Contact</th>
+                        <th>Level</th>
+                        <th>Segments</th>
+                        <th>Last Purchase</th>
+                        <th>CLV</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody id="customerRows"></tbody>
+                  </table>
+                </div>
+              </article>
+
+              <aside class="product-rail">
+                <article class="panel-card">
+                  <div class="panel-header">
+                    <h2>Customer Segments</h2>
+                  </div>
+                  <div id="customerSegmentList" class="status-list"></div>
+                </article>
+                <article class="panel-card">
+                  <div class="panel-header">
+                    <h2>Customer Activity</h2>
+                  </div>
+                  <div id="customerActivityList" class="compact-list"></div>
+                </article>
+              </aside>
+
+              <article class="panel-card span-2">
+                <div class="panel-header">
+                  <div>
+                    <h2>Customer Value</h2>
+                    <p>Lifetime value, chips, and loyalty level signals from returned records.</p>
+                  </div>
+                </div>
+                <div id="customerValueChart" class="chart-shell compact-chart"></div>
+              </article>
+
+              <article class="panel-card">
+                <div class="panel-header">
+                  <h2>Customer Health</h2>
+                </div>
+                <div id="customerHealth" class="status-list"></div>
+              </article>
+            </div>
+          </section>
+
+          <section class="view-panel" data-view-panel="customerDetail">
+            <div id="customerDetailContent" class="product-detail-shell"></div>
           </section>
 
           <section class="view-panel" data-view-panel="products">
@@ -812,6 +910,101 @@
       </section>
     </div>
 
+    <div id="customerEditor" class="modal-shell" aria-hidden="true">
+      <div class="modal-scrim" data-modal-close="customer"></div>
+      <section class="modal-panel modal-panel-wide" role="dialog" aria-modal="true" aria-labelledby="customerEditorTitle">
+        <div class="modal-header">
+          <div>
+            <div class="page-eyebrow">Customer</div>
+            <h2 id="customerEditorTitle">Edit Customer</h2>
+          </div>
+          <button id="customerEditorClose" class="btn btn-icon" type="button" aria-label="Close customer editor">
+            <i class="bi bi-x-lg" aria-hidden="true"></i>
+          </button>
+        </div>
+        <form id="customerEditForm" class="modal-form">
+          <input id="customerEditId" type="hidden" />
+          <div class="form-grid-2">
+            <label>
+              <span>Name</span>
+              <input id="customerEditName" name="name" type="text" required maxlength="255" />
+            </label>
+            <label>
+              <span>Email</span>
+              <input id="customerEditEmail" name="email" type="email" maxlength="255" />
+            </label>
+          </div>
+          <div class="form-grid-3">
+            <label>
+              <span>Phone</span>
+              <input id="customerEditPhone" name="phone" type="tel" maxlength="80" />
+            </label>
+            <label>
+              <span>Club Level</span>
+              <select id="customerEditLevel" name="level">
+                <option value="BRONZE">Bronze</option>
+                <option value="SILVER">Silver</option>
+                <option value="GOLD">Gold</option>
+                <option value="PLATINUM">Platinum</option>
+                <option value="DIAMOND">Diamond</option>
+              </select>
+            </label>
+            <label>
+              <span>Currency</span>
+              <input id="customerEditCurrency" name="currency" type="text" maxlength="8" />
+            </label>
+          </div>
+          <div class="form-grid-3">
+            <label>
+              <span>Country</span>
+              <input id="customerEditCountry" name="country" type="text" maxlength="80" />
+            </label>
+            <label>
+              <span>Sex</span>
+              <select id="customerEditSex" name="sex">
+                <option value="">Not set</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+              </select>
+            </label>
+            <label>
+              <span>Birthday</span>
+              <input id="customerEditBirthday" name="birthday" type="date" />
+            </label>
+          </div>
+          <label>
+            <span>Segments</span>
+            <input id="customerEditSegments" name="segments" type="text" placeholder="vip, repeat, wholesale" />
+          </label>
+          <label>
+            <span>Notes</span>
+            <textarea id="customerEditNotes" name="notes" rows="3" maxlength="800"></textarea>
+          </label>
+          <div class="form-grid-2">
+            <label>
+              <span>Shipping Address</span>
+              <textarea id="customerEditAddress" name="address" rows="3" maxlength="500"></textarea>
+            </label>
+            <label>
+              <span>Billing Address</span>
+              <textarea id="customerEditBilling" name="billing" rows="3" maxlength="500"></textarea>
+            </label>
+          </div>
+          <label class="form-check-row">
+            <input id="customerEditSubscribed" name="subscribed" type="checkbox" />
+            <span>Subscribed to marketing</span>
+          </label>
+          <div class="modal-actions">
+            <button id="customerEditCancel" class="btn btn-soft" type="button">Cancel</button>
+            <button id="customerEditSubmit" class="btn btn-primary-gradient" type="submit">
+              <i class="bi bi-check2" aria-hidden="true"></i>
+              <span>Save Customer</span>
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+
     <div id="articleEditor" class="modal-shell" aria-hidden="true">
       <div class="modal-scrim" data-modal-close="article"></div>
       <section class="modal-panel modal-panel-wide" role="dialog" aria-modal="true" aria-labelledby="articleEditorTitle">
@@ -897,6 +1090,6 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="/dashboard/app.js?v=dashboard-scaffold-20260608"></script>
+    <script type="module" src="/dashboard/app.js?v=dashboard-direct-api-20260608-1"></script>
   </body>
 </html>

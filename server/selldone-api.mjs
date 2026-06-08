@@ -1,4 +1,4 @@
-import { API_BASE, ARTICLE_UPDATE_FIELDS, ENDPOINTS, PRODUCT_UPDATE_FIELDS, PROFILE_ENDPOINT, SHOP, SHOP_ID } from "./config.mjs";
+import { API_BASE, ARTICLE_UPDATE_FIELDS, CUSTOMER_UPDATE_FIELDS, ENDPOINTS, PRODUCT_UPDATE_FIELDS, PROFILE_ENDPOINT, SHOP, SHOP_ID } from "./config.mjs";
 import { ensureAccessToken } from "./auth.mjs";
 import { sendJson } from "./http.mjs";
 
@@ -84,6 +84,16 @@ export function sanitizeArticleUpdatePayload(payload = {}) {
   return next;
 }
 
+export function sanitizeCustomerUpdatePayload(payload = {}) {
+  const next = {};
+  Object.entries(payload || {}).forEach(([key, value]) => {
+    if (!CUSTOMER_UPDATE_FIELDS.has(key) || value === undefined || value === null) return;
+    const normalized = normalizeCustomerFieldValue(key, value);
+    if (normalized !== undefined) next[key] = normalized;
+  });
+  return next;
+}
+
 function normalizeProductFieldValue(key, value) {
   if (["price", "discount", "commission"].includes(key)) {
     return Number(value || 0);
@@ -116,6 +126,47 @@ function normalizeArticleFieldValue(key, value) {
   return typeof value === "string" ? value.trim() : value;
 }
 
+function normalizeCustomerFieldValue(key, value) {
+  if (["subscribed"].includes(key)) return Boolean(value);
+  if (["address", "billing"].includes(key)) return normalizeAddressPayload(value);
+  if (key === "segments") {
+    const source = typeof value === "string" ? value.split(",") : Array.isArray(value) ? value : [];
+    return Array.from(new Set(source.map((item) => String(item || "").trim()).filter(Boolean))).slice(0, 24);
+  }
+  if (key === "level") {
+    const level = String(value || "").trim().toUpperCase();
+    return ["BRONZE", "SILVER", "GOLD", "PLATINUM", "DIAMOND"].includes(level) ? level : undefined;
+  }
+  if (key === "sex") {
+    const sex = String(value || "").trim();
+    return ["Male", "Female"].includes(sex) ? sex : undefined;
+  }
+  if (key === "birthday") {
+    const text = String(value || "").trim();
+    return text || undefined;
+  }
+  const text = typeof value === "string" ? value.trim() : value;
+  return text === "" ? undefined : text;
+}
+
+function normalizeAddressPayload(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const allowed = ["address", "country", "state", "city", "message", "name", "no", "phone", "postal", "unit"];
+  const next = {};
+  allowed.forEach((key) => {
+    const field = value[key];
+    if (field === undefined || field === null) return;
+    const text = String(field).trim();
+    if (text) next[key] = text;
+  });
+  if (value.location && typeof value.location === "object") {
+    const lat = Number(value.location.lat);
+    const lng = Number(value.location.lng);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) next.location = { lat, lng };
+  }
+  return Object.keys(next).length ? next : undefined;
+}
+
 export function productIdFromApiPath(pathname) {
   const match = pathname.match(/^\/api\/products\/([^/]+)$/);
   return match ? decodeURIComponent(match[1]) : null;
@@ -126,8 +177,17 @@ export function articleIdFromApiPath(pathname) {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
+export function customerIdFromApiPath(pathname) {
+  const match = pathname.match(/^\/api\/customers\/([^/]+)$/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 export function articleListFromPayload(payload = {}) {
   return firstArray(payload.articles, payload.blogs, payload.data, payload.items, payload.results);
+}
+
+export function customerListFromPayload(payload = {}) {
+  return firstArray(payload.customers, payload.data, payload.items, payload.results);
 }
 
 function firstArray(...values) {
@@ -143,10 +203,12 @@ function assertUsablePayload(payload, path) {
     Array.isArray(payload.timeline) ||
     Array.isArray(payload.tags) ||
     Array.isArray(payload.notifications) ||
+    Array.isArray(payload.customers) ||
     Array.isArray(payload.categories) ||
     Array.isArray(payload.folders) ||
     Array.isArray(payload.orders) ||
     payload.product ||
+    payload.customer ||
     payload.article ||
     payload.category ||
     payload.order;
@@ -254,6 +316,7 @@ export async function dashboardPayload(session) {
     productsResult,
     categoriesResult,
     ordersResult,
+    customersResult,
     analyticsResult,
     blogsResult,
     blogTimelineResult,
@@ -263,6 +326,7 @@ export async function dashboardPayload(session) {
     callProductsEndpoint(session),
     callCategoriesEndpoint(session),
     callDashboardEndpoint(session, ENDPOINTS.orders),
+    callCustomersEndpoint(session),
     callDashboardEndpoint(session, ENDPOINTS.shopAnalytics),
     callBlogsEndpoint(session),
     callBlogTimelineEndpoint(session),
@@ -272,6 +336,7 @@ export async function dashboardPayload(session) {
   const productsPayload = productsResult.data;
   const categoriesPayload = categoriesResult.data;
   const ordersPayload = ordersResult.data;
+  const customersPayload = customersResult.data;
   const analyticsPayload = analyticsResult.data;
   const blogsPayload = blogsResult.data;
   const blogTimelinePayload = blogTimelineResult.data;
@@ -281,6 +346,7 @@ export async function dashboardPayload(session) {
     productsResult,
     categoriesResult,
     ordersResult,
+    customersResult,
     analyticsResult,
     blogsResult,
     blogTimelineResult,
@@ -291,6 +357,7 @@ export async function dashboardPayload(session) {
     .map((result) => result.error);
   const categories = categoriesPayload.categories || categoriesPayload.folders || [];
   const notifications = notificationsPayload.notifications || [];
+  const customers = customerListFromPayload(customersPayload);
 
   return {
     fetchedAt: new Date().toISOString(),
@@ -304,6 +371,8 @@ export async function dashboardPayload(session) {
     orders: ordersPayload.orders || [],
     totalOrders: ordersPayload.total || 0,
     orderStatuses: ordersPayload.statuses || ["Open", "Reserved", "Payed", "COD", "Canceled"],
+    customers,
+    customerTotal: customersPayload.total || customers.length,
     articles: articleListFromPayload(blogsPayload),
     articleTotal: blogsPayload.total || articleListFromPayload(blogsPayload).length || 0,
     blogTimeline: articleListFromPayload({ articles: blogTimelinePayload.timeline, ...blogTimelinePayload }),
@@ -327,6 +396,16 @@ export async function callProductsEndpoint(session) {
 
 export async function callBlogsEndpoint(session) {
   return callDashboardEndpoint(session, ENDPOINTS.blogs);
+}
+
+export async function callCustomersEndpoint(session, query = {}) {
+  return callDashboardEndpoint(session, {
+    ...ENDPOINTS.customers,
+    query: {
+      ...ENDPOINTS.customers.query,
+      ...query,
+    },
+  });
 }
 
 export async function callNotificationsEndpoint(session, query = {}) {
@@ -386,7 +465,7 @@ export function fallbackUserProfile() {
     id: 0,
     name: "Selldone user",
     email: "",
-    avatarUrl: "/api/profile/avatar?id=0",
+    avatarUrl: "",
   };
 }
 

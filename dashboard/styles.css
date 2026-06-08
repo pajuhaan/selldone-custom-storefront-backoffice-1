@@ -643,6 +643,13 @@ select:focus {
   display: inline-flex;
 }
 
+.row-action-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
 .row-action-menu {
   position: absolute;
   top: calc(100% + 8px);
@@ -1101,6 +1108,7 @@ select:focus {
 .dashboard-grid,
 .orders-layout,
 .blog-layout,
+.customers-layout,
 .products-layout {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1483,6 +1491,17 @@ select:focus {
   font-size: 0.76rem;
 }
 
+.customer-avatar-large {
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--border-subtle);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent-blue) 14%, transparent), color-mix(in srgb, var(--accent-violet) 16%, transparent)),
+    var(--bg-soft);
+  color: var(--accent-blue);
+  font-size: 0.86rem;
+}
+
 .product-avatar img,
 .article-avatar img,
 .customer-avatar img {
@@ -1583,11 +1602,13 @@ select:focus {
   background: color-mix(in srgb, var(--accent-purple) 8%, transparent);
 }
 
-.product-table-row {
+.product-table-row,
+.customer-table-row {
   cursor: pointer;
 }
 
 .product-table-row:focus td,
+.customer-table-row:focus td,
 .article-table-row:focus td {
   outline: 2px solid color-mix(in srgb, var(--accent-blue) 32%, transparent);
   outline-offset: -2px;
@@ -1834,6 +1855,20 @@ select:focus {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.customer-detail-avatar {
+  min-height: 220px;
+  border-radius: 50%;
+  aspect-ratio: 1;
+  justify-self: center;
+  align-self: center;
+}
+
+.customer-detail-avatar span {
+  font-size: clamp(3rem, 7vw, 5.4rem);
+  font-weight: 850;
+  color: var(--accent-blue);
 }
 
 .product-detail-main {
@@ -2268,6 +2303,7 @@ html[data-theme="dark"] .chip-purple {
   .dashboard-grid,
   .orders-layout,
   .products-layout,
+  .customers-layout,
   .blog-layout,
   .suite-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2382,6 +2418,7 @@ html[data-theme="dark"] .chip-purple {
   .dashboard-grid,
   .orders-layout,
   .products-layout,
+  .customers-layout,
   .blog-layout,
   .suite-grid,
   .product-detail-grid {

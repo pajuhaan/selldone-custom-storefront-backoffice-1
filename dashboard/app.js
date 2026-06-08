@@ -1,3 +1,6 @@
+import { createCustomerFeature } from "./features/customers.js";
+import { createSelldoneDirectClient } from "./features/selldone-direct.js";
+
 const LOW_STOCK_LIMIT = 8;
 const LOCAL_APP_URL = "http://localhost:5173/dashboard/";
 const AUTH_REDIRECT_KEY = "pajulina_auth_redirect_started";
@@ -25,6 +28,16 @@ const VIEW_META = {
     title: "Products",
     eyebrow: "Inventory",
     subtitle: () => "Manage your catalog, stock, variants, and product performance.",
+  },
+  customers: {
+    title: "Customers",
+    eyebrow: "CRM",
+    subtitle: () => "Manage customer records, loyalty signals, segments, and profile details.",
+  },
+  customerDetail: {
+    title: "Customer Detail",
+    eyebrow: "Customer",
+    subtitle: () => "Review profile data, addresses, orders, CLV, activity, and raw Selldone fields.",
   },
   productDetail: {
     title: "Product Detail",
@@ -105,7 +118,7 @@ const MODULE_CATALOG = [
     group: "Customers",
     icon: "bi-people",
     body: "Customer records, reviews, satisfaction, cohorts, repeat customers, and audience signals.",
-    route: "marketing",
+    route: "customers",
     scopes: ["backoffice:customer:read", "backoffice:customer:write", "backoffice:reviews:read", "backoffice:reviews:write"],
   },
   {
@@ -296,13 +309,17 @@ const state = {
   user: null,
   activeView: "overview",
   activeProductId: null,
+  activeCustomerId: null,
   activeArticleId: null,
   blogLoading: false,
+  customerDetailLoadingId: null,
   dateRangeDays: 30,
   dashboard: {
     products: [],
     categories: [],
     orders: [],
+    customers: [],
+    customerDetails: {},
     articles: [],
     blogTimeline: [],
     blogTags: [],
@@ -315,6 +332,7 @@ const state = {
     },
     orderStatuses: ["Open", "Reserved", "Payed", "COD", "Canceled"],
     totalOrders: 0,
+    customerTotal: 0,
     articleTotal: 0,
     notificationTotal: 0,
     fetchedAt: null,
@@ -323,6 +341,7 @@ const state = {
   moduleFilter: "all",
   moduleSearch: "",
   editingProductId: null,
+  editingCustomerId: null,
   editingArticleId: null,
 };
 
@@ -345,6 +364,7 @@ const els = {
   tabButtons: Array.from(document.querySelectorAll("[data-view-tab]")),
   viewPanels: Array.from(document.querySelectorAll("[data-view-panel]")),
   navOrderBadge: document.getElementById("navOrderBadge"),
+  navCustomerBadge: document.getElementById("navCustomerBadge"),
   navRiskBadge: document.getElementById("navRiskBadge"),
   pageTitle: document.getElementById("pageTitle"),
   pageEyebrow: document.getElementById("pageEyebrow"),
@@ -378,6 +398,7 @@ const els = {
   productKpis: document.getElementById("productKpis"),
   blogKpis: document.getElementById("blogKpis"),
   orderKpis: document.getElementById("orderKpis"),
+  customerKpis: document.getElementById("customerKpis"),
   marketingKpis: document.getElementById("marketingKpis"),
   analyticsKpis: document.getElementById("analyticsKpis"),
   revenueChart: document.getElementById("revenueChart"),
@@ -387,8 +408,10 @@ const els = {
   recentOrders: document.getElementById("recentOrders"),
   businessHealth: document.getElementById("businessHealth"),
   productRows: document.getElementById("productRows"),
+  customerRows: document.getElementById("customerRows"),
   articleRows: document.getElementById("articleRows"),
   productDetailContent: document.getElementById("productDetailContent"),
+  customerDetailContent: document.getElementById("customerDetailContent"),
   moduleGrid: document.getElementById("moduleGrid"),
   moduleSearchInput: document.getElementById("moduleSearchInput"),
   moduleFilterButtons: Array.from(document.querySelectorAll("[data-module-filter]")),
@@ -401,6 +424,14 @@ const els = {
   searchInput: document.getElementById("searchInput"),
   categoryFilter: document.getElementById("categoryFilter"),
   riskFilter: document.getElementById("riskFilter"),
+  customerSearchInput: document.getElementById("customerSearchInput"),
+  customerLevelFilter: document.getElementById("customerLevelFilter"),
+  customerStatusFilter: document.getElementById("customerStatusFilter"),
+  refreshCustomersButton: document.getElementById("refreshCustomersButton"),
+  customerSegmentList: document.getElementById("customerSegmentList"),
+  customerActivityList: document.getElementById("customerActivityList"),
+  customerValueChart: document.getElementById("customerValueChart"),
+  customerHealth: document.getElementById("customerHealth"),
   blogSearchInput: document.getElementById("blogSearchInput"),
   articleStatusFilter: document.getElementById("articleStatusFilter"),
   refreshBlogButton: document.getElementById("refreshBlogButton"),
@@ -439,6 +470,25 @@ const els = {
   productEditSubmit: document.getElementById("productEditSubmit"),
   productEditorClose: document.getElementById("productEditorClose"),
   productEditCancel: document.getElementById("productEditCancel"),
+  customerEditor: document.getElementById("customerEditor"),
+  customerEditForm: document.getElementById("customerEditForm"),
+  customerEditId: document.getElementById("customerEditId"),
+  customerEditName: document.getElementById("customerEditName"),
+  customerEditEmail: document.getElementById("customerEditEmail"),
+  customerEditPhone: document.getElementById("customerEditPhone"),
+  customerEditLevel: document.getElementById("customerEditLevel"),
+  customerEditCurrency: document.getElementById("customerEditCurrency"),
+  customerEditCountry: document.getElementById("customerEditCountry"),
+  customerEditSex: document.getElementById("customerEditSex"),
+  customerEditBirthday: document.getElementById("customerEditBirthday"),
+  customerEditSegments: document.getElementById("customerEditSegments"),
+  customerEditNotes: document.getElementById("customerEditNotes"),
+  customerEditAddress: document.getElementById("customerEditAddress"),
+  customerEditBilling: document.getElementById("customerEditBilling"),
+  customerEditSubscribed: document.getElementById("customerEditSubscribed"),
+  customerEditSubmit: document.getElementById("customerEditSubmit"),
+  customerEditorClose: document.getElementById("customerEditorClose"),
+  customerEditCancel: document.getElementById("customerEditCancel"),
   articleEditor: document.getElementById("articleEditor"),
   articleEditForm: document.getElementById("articleEditForm"),
   articleEditId: document.getElementById("articleEditId"),
@@ -517,6 +567,17 @@ function formatDate(value) {
   }).format(date);
 }
 
+function formatShortDate(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value).slice(0, 10) || "-";
+  return new Intl.DateTimeFormat("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  }).format(date);
+}
+
 function notify(message) {
   els.toastMessage.textContent = message;
   els.toast.classList.add("show");
@@ -536,7 +597,14 @@ async function requestJson(url, options = {}) {
     return null;
   }
 
-  const data = await response.json().catch(() => ({}));
+  const contentType = response.headers.get("content-type") || "";
+  const isJson = contentType.toLowerCase().includes("application/json");
+  const data = isJson ? await response.json().catch(() => ({})) : {};
+
+  if (!isJson) {
+    throw new Error(`Expected JSON from ${url}, but the local server returned ${contentType || "non-JSON content"}. Restart the dashboard server so the latest API routes are active.`);
+  }
+
   if (!response.ok) {
     const message = typeof data.error === "string" ? data.error : data.error?.message || data.message || `Request failed: ${response.status}`;
     throw new Error(message);
@@ -554,6 +622,7 @@ async function loadSession() {
   const session = await requestJson("/api/session");
   state.session = session;
   state.user = session.user || null;
+  selldoneClient.setSession(session);
 
   if (!session.authenticated) {
     els.loginButton.href = session.loginUrl || "/auth/start";
@@ -564,7 +633,13 @@ async function loadSession() {
   sessionStorage.removeItem(AUTH_REDIRECT_KEY);
   els.authGate.classList.add("d-none");
   els.appShell.classList.remove("d-none");
-  renderShell(session.shop, session.user);
+  try {
+    const directUser = await selldoneClient.loadProfile();
+    state.user = { ...(session.user || {}), ...directUser };
+  } catch {
+    state.user = session.user || null;
+  }
+  renderShell(session.shop, state.user);
   return true;
 }
 
@@ -649,15 +724,17 @@ function setAvatarImage(image, src) {
 async function loadDashboard() {
   setLoading(true);
   try {
-    const dashboard = await requestJson("/api/dashboard");
+    const dashboard = await selldoneClient.loadDashboard();
     state.dashboard.products = normalizeProducts(dashboard.products || []);
     state.dashboard.categories = normalizeCategories(dashboard.categories || []);
     state.dashboard.orders = normalizeOrders(dashboard.orders || []);
+    state.dashboard.customers = normalizeCustomers(dashboard.customers || []);
     state.dashboard.articles = normalizeArticles(dashboard.articles || []);
     state.dashboard.blogTimeline = normalizeArticles(dashboard.blogTimeline || []);
     state.dashboard.blogTags = normalizeArticleTags(dashboard.blogTags || []);
     state.dashboard.notifications = normalizeNotifications(dashboard.notifications || []);
     state.dashboard.totalOrders = Number(dashboard.totalOrders || state.dashboard.orders.length || 0);
+    state.dashboard.customerTotal = Number(dashboard.customerTotal || state.dashboard.customers.length || 0);
     state.dashboard.articleTotal = Number(dashboard.articleTotal || state.dashboard.articles.length || 0);
     state.dashboard.notificationTotal = Number(dashboard.notificationTotal || state.dashboard.notifications.length || 0);
     state.dashboard.orderStatuses = dashboard.orderStatuses || state.dashboard.orderStatuses;
@@ -704,6 +781,11 @@ function setLoading(isLoading) {
           '<tr class="skeleton-row"><td>Loading</td><td>Loading</td><td>Loading</td><td>Loading</td><td>Loading</td><td>Loading</td><td>Loading</td><td>Loading</td></tr>',
       )
       .join("");
+    if (els.customerRows) {
+      els.customerRows.innerHTML = Array.from({ length: 6 })
+        .map(() => '<tr class="skeleton-row"><td>Loading</td><td>Loading</td><td>Loading</td><td>Loading</td><td>Loading</td><td>Loading</td><td>Loading</td><td>Loading</td></tr>')
+        .join("");
+    }
     if (els.articleRows) {
       els.articleRows.innerHTML = Array.from({ length: 6 })
         .map(() => '<tr class="skeleton-row"><td>Loading</td><td>Loading</td><td>Loading</td><td>Loading</td><td>Loading</td><td>Loading</td><td>Loading</td></tr>')
@@ -1008,6 +1090,10 @@ function normalizeOrders(orders) {
   });
 }
 
+function normalizeCustomers(customers) {
+  return customerFeature.normalizeCustomers(customers);
+}
+
 function normalizeNotifications(notifications) {
   return notifications
     .map((notification, index) => {
@@ -1239,6 +1325,8 @@ function renderAll() {
   renderNavBadges();
   renderOverview();
   renderSuite();
+  renderCustomers();
+  renderCustomerDetail();
   renderProducts();
   renderProductDetail();
   renderBlog();
@@ -1276,8 +1364,10 @@ function renderApiAlerts() {
 function renderNavBadges() {
   const summary = getSummary();
   els.navOrderBadge.title = formatNumber(summary.totalOrders);
+  if (els.navCustomerBadge) els.navCustomerBadge.title = formatNumber(summary.customers);
   els.navRiskBadge.title = formatNumber(summary.lowStock + summary.outOfStock);
   els.navOrderBadge.textContent = formatFitNumber(summary.totalOrders, { compactAt: 1000 });
+  if (els.navCustomerBadge) els.navCustomerBadge.textContent = formatFitNumber(summary.customers, { compactAt: 1000 });
   els.navRiskBadge.textContent = formatFitNumber(summary.lowStock + summary.outOfStock, { compactAt: 1000 });
 }
 
@@ -1435,7 +1525,7 @@ async function refreshNotifications({ silent = false } = {}) {
     button.disabled = true;
   });
   try {
-    const payload = await requestJson("/api/notifications?mode=new&limit=20&offset=0");
+    const payload = await selldoneClient.notifications({ mode: "new", limit: 20, offset: 0, shop_id: state.session?.shop?.id });
     state.dashboard.notifications = normalizeNotifications(payload.notifications || []);
     state.dashboard.notificationTotal = Number(payload.total || state.dashboard.notifications.length || 0);
     state.dashboard.errors = (state.dashboard.errors || []).filter((error) => error?.label !== "Notifications");
@@ -1556,7 +1646,7 @@ function moduleMetric(key, summary) {
     PRODUCTS: formatNumber(summary.products),
     CATEGORIES: formatNumber(summary.categories),
     ORDERS: formatNumber(summary.totalOrders),
-    CUSTOMERS: formatNumber(analytics.customers || getUniqueCustomers().uniqueCustomers),
+    CUSTOMERS: formatNumber(summary.customers || analytics.customers || getUniqueCustomers().uniqueCustomers),
     COMMUNITY: formatNumber(getUniqueCustomers().repeatCustomers),
     MARKETING: formatNumber(getCampaignProducts().length),
     INCENTIVES: formatNumber(summary.discounted),
@@ -1662,7 +1752,7 @@ function countScopesForGroup(group) {
 
 function renderSuiteRoadmap(modules) {
   const candidates = modules
-    .filter((module) => !["overview", "orders", "products", "blog", "marketing", "analytics", "settings"].includes(module.route) || !module.write)
+    .filter((module) => !["overview", "orders", "customers", "products", "blog", "marketing", "analytics", "settings"].includes(module.route) || !module.write)
     .slice(0, 8);
 
   return candidates
@@ -1692,6 +1782,14 @@ function focusModuleCard(moduleKey) {
     card.scrollIntoView({ behavior: "smooth", block: "center" });
     window.setTimeout(() => card.classList.remove("is-focused"), 1400);
   }, 0);
+}
+
+function renderCustomers() {
+  return customerFeature.renderCustomers();
+}
+
+function renderCustomerDetail() {
+  return customerFeature.renderCustomerDetail();
 }
 
 function renderProducts() {
@@ -1841,7 +1939,7 @@ async function refreshBlogPosts({ silent = false } = {}) {
   }
 
   try {
-    const payload = await requestJson("/api/blogs");
+    const payload = await selldoneClient.blogs();
     if (!payload) return;
     state.dashboard.articles = normalizeArticles(payload.articles || payload.blogs || payload.data || payload.items || []);
     state.dashboard.articleTotal = Number(payload.total || state.dashboard.articles.length || 0);
@@ -2222,6 +2320,18 @@ function getFilteredProducts() {
   });
 }
 
+function getFilteredCustomers() {
+  return customerFeature.getFilteredCustomers();
+}
+
+function getCustomerSummary() {
+  return customerFeature.getCustomerSummary();
+}
+
+function buildCustomerSeries(mapper) {
+  return customerFeature.buildCustomerSeries(mapper);
+}
+
 function getFilteredArticles() {
   const search = (els.blogSearchInput?.value || "").trim().toLowerCase();
   const status = els.articleStatusFilter?.value || "all";
@@ -2400,6 +2510,7 @@ function getSummary() {
     products: products.length,
     articles: state.dashboard.articleTotal || state.dashboard.articles.length,
     notifications: state.dashboard.notificationTotal || state.dashboard.notifications.length,
+    customers: state.dashboard.customerTotal || state.dashboard.customers.length,
     categories: state.dashboard.categories.length || new Set(products.map((product) => product.categoryId)).size,
     orders: orders.length,
     totalOrders,
@@ -3015,6 +3126,34 @@ function findProduct(productId) {
   return state.dashboard.products.find((product) => String(product.id) === String(productId)) || null;
 }
 
+function openCustomerDetail(customerId, updateHash = true) {
+  return customerFeature.openCustomerDetail(customerId, updateHash);
+}
+
+function updateCustomerDetailHeading(customer) {
+  return customerFeature.updateCustomerDetailHeading(customer);
+}
+
+function findCustomer(customerId) {
+  return customerFeature.findCustomer(customerId);
+}
+
+function refreshCustomers(options) {
+  return customerFeature.refreshCustomers(options);
+}
+
+function openCustomerEditor(customerId) {
+  return customerFeature.openCustomerEditor(customerId);
+}
+
+function closeCustomerEditor() {
+  return customerFeature.closeCustomerEditor();
+}
+
+function submitCustomerEdit(event) {
+  return customerFeature.submitCustomerEdit(event);
+}
+
 function toggleProductMenu(button) {
   const wrapper = button.closest("[data-product-action-menu]");
   const willOpen = !wrapper.classList.contains("is-open");
@@ -3085,11 +3224,7 @@ async function submitProductEdit(event) {
 
   els.productEditSubmit.disabled = true;
   try {
-    await requestJson(`/api/products/${encodeURIComponent(productId)}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    await selldoneClient.updateProduct(encodeURIComponent(productId), payload);
     applyProductEdit(productId, payload);
     closeProductEditor();
     renderAll();
@@ -3112,7 +3247,7 @@ async function deleteProduct(productId) {
   if (!confirmed) return;
 
   try {
-    await requestJson(`/api/products/${encodeURIComponent(productId)}`, { method: "DELETE" });
+    await selldoneClient.deleteProduct(encodeURIComponent(productId));
     state.dashboard.products = state.dashboard.products.filter((item) => String(item.id) !== String(productId));
     if (String(state.activeProductId) === String(productId)) {
       state.activeProductId = null;
@@ -3148,6 +3283,10 @@ function formatProductActionError(message) {
     return "Selldone requires Google 2FA verification for this product action.";
   }
   return message || "Product action failed.";
+}
+
+function formatCustomerActionError(message) {
+  return customerFeature.formatCustomerActionError(message);
 }
 
 function findArticle(articleId) {
@@ -3259,11 +3398,7 @@ async function submitArticleEdit(event) {
 
   els.articleEditSubmit.disabled = true;
   try {
-    await requestJson(articleId ? `/api/blogs/${encodeURIComponent(articleId)}` : "/api/blogs", {
-      method: articleId ? "PUT" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    await selldoneClient.saveBlogArticle(articleId ? { ...payload, article_id: articleId } : payload, payload.tags);
     closeArticleEditor();
     await loadDashboard();
     notify(articleId ? "Blog post updated" : "Blog post created");
@@ -3285,7 +3420,7 @@ async function deleteArticle(articleId) {
   if (!confirmed) return;
 
   try {
-    await requestJson(`/api/blogs/${encodeURIComponent(articleId)}`, { method: "DELETE" });
+    await selldoneClient.deleteBlogArticle(encodeURIComponent(articleId));
     state.dashboard.articles = state.dashboard.articles.filter((item) => String(item.id) !== String(articleId));
     state.dashboard.articleTotal = Math.max(0, Number(state.dashboard.articleTotal || 0) - 1);
     renderAll();
@@ -3305,6 +3440,17 @@ function toDateTimeLocalValue(value) {
   if (Number.isNaN(date.getTime())) return "";
   const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   return offsetDate.toISOString().slice(0, 16);
+}
+
+function toDateInputValue(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    const text = String(value || "").trim();
+    return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : "";
+  }
+  const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return offsetDate.toISOString().slice(0, 10);
 }
 
 function toApiDateTimeValue(value) {
@@ -3567,6 +3713,7 @@ function exportCsv() {
 function renderError(message) {
   els.apiAlerts.innerHTML = `<div class="alert" role="alert"><strong>Dashboard</strong><span>${escapeHtml(message)}</span></div>`;
   els.productRows.innerHTML = tableEmpty(8, "Dashboard request failed", message);
+  if (els.customerRows) els.customerRows.innerHTML = tableEmpty(8, "Customers request failed", message);
   if (els.articleRows) els.articleRows.innerHTML = tableEmpty(7, "Blog request failed", message);
   els.orderRows.innerHTML = tableEmpty(8, "Orders request failed", message);
   notify(message);
@@ -3633,6 +3780,49 @@ function escapeAttribute(value) {
   return escapeHtml(value);
 }
 
+const selldoneClient = createSelldoneDirectClient({
+  requestSession: () => requestJson("/api/session"),
+  onAuthExpired: (message) => beginAuthRedirect(message || "Your Selldone session expired."),
+});
+
+const customerFeature = createCustomerFeature({
+  state,
+  els,
+  ACCENTS,
+  statCard,
+  formatNumber,
+  formatPercent,
+  formatMoney,
+  formatFitMoney,
+  formatDate,
+  formatShortDate,
+  titleCase,
+  getInitials,
+  escapeHtml,
+  escapeAttribute,
+  tableEmpty,
+  emptyState,
+  statusRows,
+  renderLineChart,
+  productInfoPanel,
+  productDetailRawRows,
+  formatRawValue,
+  normalizeOrders,
+  normalizeArticleTags,
+  readFirstNumber,
+  buildSeriesFromItems,
+  requestJson,
+  notify,
+  splitTags,
+  ensureSelectOption,
+  toDateInputValue,
+  renderSuite,
+  renderSettings,
+  renderNavBadges,
+  showView,
+  selldone: selldoneClient,
+});
+
 function bindEvents() {
   els.refreshButton.addEventListener("click", loadDashboard);
   els.refreshNotificationsButton?.addEventListener("click", () => refreshNotifications());
@@ -3666,6 +3856,10 @@ function bindEvents() {
   els.articleStatusFilter?.addEventListener("change", renderBlog);
   els.refreshBlogButton?.addEventListener("click", () => refreshBlogPosts());
   els.newArticleButton?.addEventListener("click", () => openArticleEditor());
+  els.customerSearchInput?.addEventListener("input", renderCustomers);
+  els.customerLevelFilter?.addEventListener("change", renderCustomers);
+  els.customerStatusFilter?.addEventListener("change", renderCustomers);
+  els.refreshCustomersButton?.addEventListener("click", () => refreshCustomers());
   els.moduleSearchInput?.addEventListener("input", () => {
     state.moduleSearch = els.moduleSearchInput.value;
     renderSuite();
@@ -3683,17 +3877,34 @@ function bindEvents() {
   els.articleEditForm?.addEventListener("submit", submitArticleEdit);
   els.articleEditorClose?.addEventListener("click", closeArticleEditor);
   els.articleEditCancel?.addEventListener("click", closeArticleEditor);
+  els.customerEditForm?.addEventListener("submit", submitCustomerEdit);
+  els.customerEditorClose?.addEventListener("click", closeCustomerEditor);
+  els.customerEditCancel?.addEventListener("click", closeCustomerEditor);
   els.globalSearchInput.addEventListener("input", () => {
     if (state.activeView === "blog") {
       els.blogSearchInput.value = els.globalSearchInput.value;
       renderBlog();
       return;
     }
+    if (state.activeView === "customers") {
+      els.customerSearchInput.value = els.globalSearchInput.value;
+      renderCustomers();
+      return;
+    }
     els.searchInput.value = els.globalSearchInput.value;
     renderProducts();
   });
   els.globalSearchInput.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") showView(state.activeView === "blog" ? "blog" : "products");
+    if (event.key !== "Enter") return;
+    if (state.activeView === "blog") {
+      showView("blog");
+      return;
+    }
+    if (state.activeView === "customers") {
+      showView("customers");
+      return;
+    }
+    showView("products");
   });
 
   document.addEventListener("click", (event) => {
@@ -3743,6 +3954,24 @@ function bindEvents() {
       return;
     }
 
+    const customerEdit = event.target.closest("[data-customer-edit]");
+    if (customerEdit) {
+      openCustomerEditor(customerEdit.dataset.customerEdit);
+      return;
+    }
+
+    const customerOpenButton = event.target.closest("button[data-customer-open]");
+    if (customerOpenButton) {
+      openCustomerDetail(customerOpenButton.dataset.customerOpen);
+      return;
+    }
+
+    const customerOpen = event.target.closest("[data-customer-open]");
+    if (customerOpen && !event.target.closest("button, a, input, select, textarea")) {
+      openCustomerDetail(customerOpen.dataset.customerOpen);
+      return;
+    }
+
     const productOpen = event.target.closest("[data-product-open]");
     if (productOpen && !event.target.closest("button, a, input, select, textarea, [data-product-action-menu]")) {
       openProductDetail(productOpen.dataset.productOpen);
@@ -3756,6 +3985,11 @@ function bindEvents() {
 
     if (event.target.closest("[data-modal-close='article']")) {
       closeArticleEditor();
+      return;
+    }
+
+    if (event.target.closest("[data-modal-close='customer']")) {
+      closeCustomerEditor();
       return;
     }
 
@@ -3785,8 +4019,14 @@ function bindEvents() {
 
   document.addEventListener("keydown", (event) => {
     const productOpen = event.target.closest?.("[data-product-open]");
-    if (!productOpen || !["Enter", " "].includes(event.key)) return;
+    const customerOpen = event.target.closest?.("[data-customer-open]");
+    if (!productOpen && !customerOpen) return;
+    if (!["Enter", " "].includes(event.key)) return;
     event.preventDefault();
+    if (customerOpen) {
+      openCustomerDetail(customerOpen.dataset.customerOpen);
+      return;
+    }
     openProductDetail(productOpen.dataset.productOpen);
   });
 
@@ -3800,12 +4040,17 @@ function readHashView() {
     state.activeProductId = decodeURIComponent(productMatch[1]);
     return "productDetail";
   }
+  const customerMatch = view.match(/^customer-(.+)$/);
+  if (customerMatch) {
+    state.activeCustomerId = decodeURIComponent(customerMatch[1]);
+    return "customerDetail";
+  }
   return VIEW_META[view] ? view : "overview";
 }
 
 function showView(view = "overview", updateHash = true) {
   const nextView = VIEW_META[view] ? view : "overview";
-  const navigationView = nextView === "productDetail" ? "products" : nextView;
+  const navigationView = nextView === "productDetail" ? "products" : nextView === "customerDetail" ? "customers" : nextView;
   state.activeView = nextView;
 
   els.navLinks.forEach((link) => {
@@ -3836,6 +4081,18 @@ function showView(view = "overview", updateHash = true) {
 
   if (nextView === "blog" && state.session?.authenticated && !state.dashboard.articles.length) {
     refreshBlogPosts({ silent: true });
+  }
+  if (nextView === "customers" && state.session?.authenticated && !state.dashboard.customers.length) {
+    refreshCustomers({ silent: true });
+  }
+  if (
+    nextView === "customerDetail" &&
+    state.session?.authenticated &&
+    state.activeCustomerId &&
+    !findCustomer(state.activeCustomerId) &&
+    state.customerDetailLoadingId !== String(state.activeCustomerId)
+  ) {
+    openCustomerDetail(state.activeCustomerId, false);
   }
 }
 
@@ -3904,6 +4161,7 @@ function closeUserMenuOnEscape(event) {
     closeProductMenus();
     closeArticleMenus();
     closeProductEditor();
+    closeCustomerEditor();
     closeArticleEditor();
   }
 }
