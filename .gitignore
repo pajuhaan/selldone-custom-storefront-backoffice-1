@@ -1,0 +1,11 @@
+.chrome-*
+.auth/
+.idea/
+.tmp_*/
+*.log
+*.err.log
+*.out.log
+*.zip
+dashboard-*.png
+node-*.log
+server*.log

@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pajulina Beauty Storefront</title>
+    <meta
+      name="description"
+      content="Pajulina beauty storefront with cosmetics, skincare, fragrance, gifts, and product detail pages."
+    />
+    <meta name="shop-name" content="pajulina" />
+    <meta name="shop-prefix-address" content="" />
+    <meta name="custom-home" content="shop" />
+    <meta content="https://selldone.com" name="service-url" />
+    <meta content="https://gapi.selldone.com" name="selldone-gapi" />
+    <meta content="https://xapi.selldone.com" name="selldone-xapi" />
+    <meta content="https://iframe.selldone.com" name="selldone-iframe" />
+    <meta content="https://capi.selldone.com" name="selldone-capi" />
+    <meta content="https://selldone.com/cdn-shop-images-1" name="selldone-cdn-images" />
+    <meta content="https://selldone.com/cdn-shop-jsons-1" name="selldone-cdn-jsons" />
+    <meta content="https://selldone.com/cdn-videos" name="selldone-cdn-videos" />
+    <meta content="https://selldone.com/cdn-shop-temp-files" name="selldone-cdn-temp-files" />
+    <meta content="https://selldone.com/cdn-ar" name="selldone-cdn-ar" />
+    <meta content="https://selldone.com/cdn-id" name="selldone-cdn-id" />
+    <meta content="true" name="storage-redirect" />
+    <meta content="https://cdn.selldone.com" name="storage-redirect-host" />
+    <meta content="true" name="storage-redirect-thumbnails" />
+    <link rel="stylesheet" href="styles.css?v=storefront-root-scaffold-20260608" />
+    <script defer src="https://cdn.jsdelivr.net/npm/@selldone/sdk-storefront@1/dist/bundle.min.js"></script>
+    <script defer src="app.js?v=storefront-root-scaffold-20260608"></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="utility-bar">
+        <div class="page-shell utility-inner">
+          <span>Free shipping on $45 orders. Members earn points on every purchase.</span>
+          <nav aria-label="Utility navigation">
+            <a href="#shop">Order Status</a>
+            <a href="#shop">Stores</a>
+            <a href="#shop">Gift Cards</a>
+            <a href="#shop">Rewards</a>
+            <a href="/dashboard/">Dashboard</a>
+          </nav>
+        </div>
+      </div>
+
+      <div class="main-nav">
+        <div class="page-shell nav-inner">
+          <button class="icon-button menu-button" type="button" aria-label="Open menu" data-menu-toggle>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 7h16M4 12h16M4 17h16" />
+            </svg>
+          </button>
+          <a class="brand-mark" href="#home" aria-label="Pajulina home">
+            <span>Pajulina</span>
+          </a>
+          <nav class="primary-links" aria-label="Primary navigation" data-primary-links>
+            <a href="#shop" data-nav-link="shop">Shop</a>
+            <a href="#shop?category=makeup" data-nav-link="makeup">Makeup</a>
+            <a href="#shop?category=skincare" data-nav-link="skincare">Skin Care</a>
+            <a href="#shop?category=fragrance" data-nav-link="fragrance">Fragrance</a>
+            <a href="#shop?category=gifts" data-nav-link="gifts">Gifts</a>
+            <a href="#home#events" data-nav-link="events">Events</a>
+          </nav>
+          <form class="search-form" role="search" data-search-form>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m21 21-4.3-4.3M10.8 18a7.2 7.2 0 1 1 0-14.4 7.2 7.2 0 0 1 0 14.4Z" />
+            </svg>
+            <input type="search" name="q" placeholder="Search Pajulina Beauty" autocomplete="off" data-site-search />
+          </form>
+          <div class="nav-actions">
+            <button class="icon-button" type="button" aria-label="Account">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M20 21a8 8 0 0 0-16 0M12 13a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z" />
+              </svg>
+            </button>
+            <button class="icon-button cart-button" type="button" aria-label="Open bag" data-cart-open>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M7 8h10l1.2 12H5.8L7 8ZM9 8a3 3 0 0 1 6 0" />
+              </svg>
+              <span class="cart-count" data-cart-count>0</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main id="app" tabindex="-1"></main>
+
+    <footer class="site-footer">
+      <div class="page-shell footer-grid">
+        <section class="footer-pitch">
+          <h2>the possibilities are beautiful.</h2>
+          <p>Fresh color, thoughtful skin care, and easy gifts for every kind of beauty routine.</p>
+          <a href="#shop">Shop new arrivals</a>
+        </section>
+        <nav aria-label="Rewards">
+          <h3>Pajulina Rewards</h3>
+          <a href="#shop">Join Rewards</a>
+          <a href="#shop">Member offers</a>
+          <a href="#shop">Birthday gifts</a>
+          <a href="#shop">Credit card</a>
+        </nav>
+        <nav aria-label="Help">
+          <h3>Get Help</h3>
+          <a href="#shop">Track an Order</a>
+          <a href="#shop">Shipping</a>
+          <a href="#shop">Returns</a>
+          <a href="#shop">Contact us</a>
+        </nav>
+        <nav aria-label="Company">
+          <h3>Our Company</h3>
+          <a href="#shop">About us</a>
+          <a href="#shop">Stores</a>
+          <a href="#shop">Careers</a>
+          <a href="#shop">Accessibility</a>
+        </nav>
+        <section class="app-card" aria-label="Mobile app">
+          <h3>Download the App</h3>
+          <div class="qr-box" aria-hidden="true"></div>
+          <div class="store-badges">
+            <span>App Store</span>
+            <span>Google Play</span>
+          </div>
+        </section>
+        <section class="signup-card">
+          <h3>Sign up for news and special offers.</h3>
+          <form data-newsletter-form>
+            <input type="email" placeholder="Email address" aria-label="Email address" />
+            <button type="submit">Sign up</button>
+          </form>
+        </section>
+      </div>
+      <div class="footer-bottom">
+        <div class="page-shell">
+          <span>(c) Pajulina Beauty 2026</span>
+          <nav aria-label="Legal">
+            <a href="#shop">Terms of Use</a>
+            <a href="#shop">Privacy Policy</a>
+            <a href="#shop">Your Privacy Choices</a>
+            <a href="#shop">Accessibility</a>
+          </nav>
+        </div>
+      </div>
+    </footer>
+
+    <aside class="cart-drawer" aria-hidden="true" aria-label="Shopping bag" data-cart-drawer>
+      <button class="cart-scrim" type="button" aria-label="Close bag" data-cart-close></button>
+      <section class="cart-panel">
+        <div class="cart-head">
+          <div>
+            <span>Shopping Bag</span>
+            <strong data-cart-title>0 items</strong>
+          </div>
+          <button class="icon-button" type="button" aria-label="Close bag" data-cart-close>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 6l12 12M18 6 6 18" />
+            </svg>
+          </button>
+        </div>
+        <div class="cart-items" data-cart-items></div>
+        <div class="cart-summary">
+          <div><span>Subtotal</span><strong data-cart-subtotal>$0.00</strong></div>
+          <button type="button">Checkout</button>
+        </div>
+      </section>
+    </aside>
+
+    <button class="floating-help" type="button" aria-label="Beauty assistant">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 3 9.8 8.2 4 10l5.8 1.8L12 17l2.2-5.2L20 10l-5.8-1.8L12 3ZM18 14l-.9 2.1L15 17l2.1.9L18 20l.9-2.1L21 17l-2.1-.9L18 14Z" />
+      </svg>
+    </button>
+  </body>
+</html>

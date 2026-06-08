@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pajulina Setup</title>
+    <link rel="stylesheet" href="/setup/styles.css" />
+    <script src="/setup/app.js" defer></script>
+  </head>
+  <body>
+    <main class="setup-shell">
+      <section class="intro">
+        <p class="eyebrow">Selldone setup</p>
+        <h1>Connect this package to your shop.</h1>
+        <p class="lead">
+          Enter an existing Selldone OAuth client, or use the automatic MCP path to create one for this dashboard. Setup writes only configuration to <code>.env</code>; OAuth tokens stay in the server token store.
+        </p>
+      </section>
+
+      <section class="mode-grid">
+        <article class="setup-card is-active" data-mode-card="manual">
+          <div>
+            <span class="step">1</span>
+            <h2>Manual setup</h2>
+            <p>Use a known client ID and shop ID. This is the standalone package path.</p>
+          </div>
+          <button class="mode-button" type="button" data-mode="manual">Use manual</button>
+        </article>
+
+        <article class="setup-card" data-mode-card="auto">
+          <div>
+            <span class="step">2</span>
+            <h2>Automatic setup</h2>
+            <p>Create or repair a shop-bound public OAuth client through Selldone MCP, then authenticate the admin.</p>
+          </div>
+          <button class="mode-button" type="button" data-mode="auto">Use automatic</button>
+        </article>
+      </section>
+
+      <section class="panel" data-panel="manual">
+        <div class="panel-heading">
+          <h2>Manual values</h2>
+          <p>Current project defaults are prefilled. Update them for a different shop before saving.</p>
+        </div>
+        <form class="setup-form" data-manual-form>
+          <label>
+            <span>OAuth client ID</span>
+            <input name="clientId" autocomplete="off" required />
+          </label>
+          <label>
+            <span>Shop ID</span>
+            <input name="shopId" inputmode="numeric" autocomplete="off" required />
+          </label>
+          <label>
+            <span>Shop name</span>
+            <input name="shopName" autocomplete="organization" />
+          </label>
+          <label>
+            <span>Shop domain</span>
+            <input name="shopDomain" autocomplete="url" />
+          </label>
+          <label>
+            <span>Storefront handle</span>
+            <input name="storefrontShopHandle" autocomplete="off" required />
+          </label>
+          <label>
+            <span>App base URL</span>
+            <input name="appBaseUrl" autocomplete="url" />
+          </label>
+          <label class="wide">
+            <span>OAuth scopes</span>
+            <textarea name="scopes" rows="5"></textarea>
+          </label>
+          <div class="form-footer">
+            <p data-callback-note>Callback URL will be shown here.</p>
+            <button class="primary" type="submit">Save and authenticate</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel d-none" data-panel="auto">
+        <div class="panel-heading">
+          <h2>Automatic MCP path</h2>
+          <p>
+            A standalone server cannot call MCP by itself. When a Selldone MCP bridge is available, create the client with the shown request and paste the returned JSON below.
+          </p>
+        </div>
+        <div class="auto-layout">
+          <div>
+            <h3>MCP request</h3>
+            <pre data-mcp-request>{}</pre>
+          </div>
+          <form class="setup-form compact" data-auto-form>
+            <label class="wide">
+              <span>Paste MCP result JSON</span>
+              <textarea name="mcpResult" rows="8" placeholder='{"client_id":"...","shop_id":14952}'></textarea>
+            </label>
+            <div class="form-footer">
+              <p>Expected fields: <code>client_id</code> and <code>shop_id</code>. The direct API fallback is documented in the response if MCP is not connected.</p>
+              <button class="primary" type="submit">Save MCP result</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <section class="status" role="status" aria-live="polite" data-status></section>
+    </main>
+  </body>
+</html>
