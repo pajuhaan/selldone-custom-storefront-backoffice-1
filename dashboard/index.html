@@ -122,10 +122,36 @@
           </div>
 
           <div class="topbar-actions">
-            <button class="btn btn-icon" type="button" aria-label="Notifications">
-              <i class="bi bi-bell" aria-hidden="true"></i>
-              <span class="notification-dot">5</span>
-            </button>
+            <div id="notificationMenu" class="notification-menu">
+              <button
+                id="notificationsButton"
+                class="btn btn-icon"
+                type="button"
+                aria-label="Notifications"
+                aria-haspopup="true"
+                aria-expanded="false"
+              >
+                <i class="bi bi-bell" aria-hidden="true"></i>
+                <span id="notificationBadge" class="notification-dot is-empty">0</span>
+              </button>
+              <section id="notificationDropdown" class="notification-dropdown" aria-label="Notifications">
+                <div class="notification-dropdown-head">
+                  <div>
+                    <strong>Notifications</strong>
+                    <span>Recent Selldone activity</span>
+                  </div>
+                  <button id="refreshNotificationsMenuButton" class="btn btn-soft btn-sm" type="button">
+                    <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+                    <span>Refresh</span>
+                  </button>
+                </div>
+                <div id="notificationDropdownList" class="notification-list notification-list-menu"></div>
+                <button class="notification-view-all" type="button" data-view-jump="overview">
+                  View dashboard activity
+                  <i class="bi bi-arrow-right" aria-hidden="true"></i>
+                </button>
+              </section>
+            </div>
             <button class="btn btn-icon" type="button" aria-label="Help">
               <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
             </button>
@@ -261,6 +287,20 @@
                   </div>
                 </div>
                 <div id="storeStatus" class="status-list"></div>
+              </article>
+
+              <article id="notificationsPanel" class="panel-card">
+                <div class="panel-header">
+                  <div>
+                    <h2>Notifications</h2>
+                    <p>Recent Selldone backoffice notifications for this shop.</p>
+                  </div>
+                  <button id="refreshNotificationsButton" class="link-button" type="button">
+                    <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+                    Refresh
+                  </button>
+                </div>
+                <div id="notificationList" class="notification-list"></div>
               </article>
 
               <article class="panel-card">

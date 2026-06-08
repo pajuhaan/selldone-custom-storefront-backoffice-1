@@ -306,6 +306,7 @@ const state = {
     articles: [],
     blogTimeline: [],
     blogTags: [],
+    notifications: [],
     errors: [],
     analytics: {
       window: { days: 30, offset: 0 },
@@ -315,6 +316,7 @@ const state = {
     orderStatuses: ["Open", "Reserved", "Payed", "COD", "Canceled"],
     totalOrders: 0,
     articleTotal: 0,
+    notificationTotal: 0,
     fetchedAt: null,
   },
   actionMode: "low",
@@ -362,6 +364,15 @@ const els = {
   userAvatarLargeFallback: document.getElementById("userAvatarLargeFallback"),
   sidebarAvatarFallback: document.getElementById("sidebarAvatarFallback"),
   apiAlerts: document.getElementById("apiAlerts"),
+  notificationMenu: document.getElementById("notificationMenu"),
+  notificationDropdown: document.getElementById("notificationDropdown"),
+  notificationsButton: document.getElementById("notificationsButton"),
+  notificationBadge: document.getElementById("notificationBadge"),
+  refreshNotificationsButton: document.getElementById("refreshNotificationsButton"),
+  refreshNotificationsMenuButton: document.getElementById("refreshNotificationsMenuButton"),
+  notificationsPanel: document.getElementById("notificationsPanel"),
+  notificationList: document.getElementById("notificationList"),
+  notificationDropdownList: document.getElementById("notificationDropdownList"),
   overviewKpis: document.getElementById("overviewKpis"),
   suiteKpis: document.getElementById("suiteKpis"),
   productKpis: document.getElementById("productKpis"),
@@ -527,7 +538,8 @@ async function requestJson(url, options = {}) {
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(data.error || data.message || `Request failed: ${response.status}`);
+    const message = typeof data.error === "string" ? data.error : data.error?.message || data.message || `Request failed: ${response.status}`;
+    throw new Error(message);
   }
 
   return data;
@@ -644,8 +656,10 @@ async function loadDashboard() {
     state.dashboard.articles = normalizeArticles(dashboard.articles || []);
     state.dashboard.blogTimeline = normalizeArticles(dashboard.blogTimeline || []);
     state.dashboard.blogTags = normalizeArticleTags(dashboard.blogTags || []);
+    state.dashboard.notifications = normalizeNotifications(dashboard.notifications || []);
     state.dashboard.totalOrders = Number(dashboard.totalOrders || state.dashboard.orders.length || 0);
     state.dashboard.articleTotal = Number(dashboard.articleTotal || state.dashboard.articles.length || 0);
+    state.dashboard.notificationTotal = Number(dashboard.notificationTotal || state.dashboard.notifications.length || 0);
     state.dashboard.orderStatuses = dashboard.orderStatuses || state.dashboard.orderStatuses;
     state.dashboard.errors = dashboard.errors || [];
     state.dashboard.analytics = normalizeStoreAnalytics(dashboard.analytics || {}, state.dashboard.orders);
@@ -994,6 +1008,84 @@ function normalizeOrders(orders) {
   });
 }
 
+function normalizeNotifications(notifications) {
+  return notifications
+    .map((notification, index) => {
+      const data = notification.data && typeof notification.data === "object" ? notification.data : {};
+      const type = String(notification.type || data.type || "notification");
+      const typeLabel = normalizeNotificationType(type);
+      const title = firstNotificationText(notification.title, data.title, data.subject, data.heading, typeLabel);
+      const message = firstNotificationText(
+        notification.message,
+        data.message,
+        data.text,
+        data.body,
+        data.description,
+        data.content,
+        title,
+      );
+      const readAt = notification.read_at || notification.readAt || "";
+      const createdAt = notification.created_at || notification.createdAt || notification.updated_at || notification.updatedAt || "";
+      const count = Math.max(1, Number(notification.count || data.count || 1));
+
+      return {
+        id: notification.id ?? `${type}-${createdAt || index}`,
+        type,
+        typeLabel,
+        title,
+        message,
+        count,
+        readAt,
+        isUnread: !readAt && notification.read !== true,
+        createdAt,
+        href: firstNotificationText(notification.url, notification.link, notification.href, notification.action_url, data.url, data.link, data.href),
+        icon: notificationIcon(type, message),
+        variant: notificationVariant(type, message, !readAt && notification.read !== true),
+        raw: notification,
+      };
+    })
+    .sort((left, right) => new Date(right.createdAt || 0).getTime() - new Date(left.createdAt || 0).getTime());
+}
+
+function firstNotificationText(...values) {
+  for (const value of values) {
+    if (typeof value !== "string" && typeof value !== "number") continue;
+    const text = String(value).trim();
+    if (text && text !== "[object Object]") return text;
+  }
+  return "";
+}
+
+function normalizeNotificationType(type) {
+  const clean = String(type || "")
+    .split(/[\\/]/)
+    .pop()
+    .replace(/Notification$/i, "")
+    .replace(/([a-z])([A-Z])/g, "$1 $2");
+  return titleCase(clean || "Notification");
+}
+
+function notificationIcon(type, message = "") {
+  const value = `${type} ${message}`.toLowerCase();
+  if (/order|basket|payment|transaction/.test(value)) return "bi-receipt";
+  if (/product|stock|inventory|catalog/.test(value)) return "bi-box-seam";
+  if (/shipping|delivery|logistic|fulfill/.test(value)) return "bi-truck";
+  if (/ticket|support|message|comment|chat/.test(value)) return "bi-chat-square-text";
+  if (/blog|article|page|content/.test(value)) return "bi-journal-text";
+  if (/error|failed|fail|cancel|alert|warning|danger/.test(value)) return "bi-exclamation-triangle";
+  return "bi-bell";
+}
+
+function notificationVariant(type, message = "", isUnread = false) {
+  const value = `${type} ${message}`.toLowerCase();
+  if (/error|failed|fail|cancel|alert|danger/.test(value)) return "danger";
+  if (/warning|stock|inventory|pending/.test(value)) return "warning";
+  if (/order|basket|payment|transaction|delivery/.test(value)) return "success";
+  if (/ticket|support|message|comment|chat/.test(value)) return "info";
+  if (/blog|article|page|content/.test(value)) return "purple";
+  return isUnread ? "purple" : "neutral";
+}
+
 function normalizeStoreAnalytics(payload = {}, orders = []) {
   const windowDays = Number(payload.window?.days || payload.days || payload.raw?.days || 30);
   const labels = makeLastDayLabels(windowDays);
@@ -1288,6 +1380,76 @@ function renderOverview() {
   els.topProducts.innerHTML = renderCompactProducts(getTopProducts(5));
   els.recentOrders.innerHTML = renderCompactOrders(state.dashboard.orders.slice(0, 5));
   els.businessHealth.innerHTML = renderBusinessHealth(summary);
+  renderNotifications();
+}
+
+function renderNotifications() {
+  if (!els.notificationBadge) return;
+
+  const notifications = state.dashboard.notifications || [];
+  const unreadCount = notifications.filter((notification) => notification.isUnread).reduce((sum, notification) => sum + notification.count, 0);
+  const badgeCount = unreadCount || state.dashboard.notificationTotal || notifications.length;
+  els.notificationBadge.textContent = formatFitNumber(badgeCount, { compactAt: 1000 });
+  els.notificationBadge.title = formatNumber(badgeCount);
+  els.notificationBadge.classList.toggle("is-empty", badgeCount <= 0);
+
+  const content = notifications.length
+    ? notifications.slice(0, 8).map(renderNotificationItem).join("")
+    : emptyState("No notifications", "Selldone has not returned recent notifications for this shop.");
+  [els.notificationList, els.notificationDropdownList].filter(Boolean).forEach((list) => {
+    list.innerHTML = content;
+  });
+}
+
+function renderNotificationItem(notification) {
+  const status = notification.isUnread ? "Unread" : "Read";
+  const countChip =
+    notification.count > 1
+      ? `<span class="chip chip-neutral" title="${escapeAttribute(formatNumber(notification.count))}">x${escapeHtml(formatFitNumber(notification.count, { compactAt: 1000 }))}</span>`
+      : "";
+  const href = notification.href && /^https?:\/\//i.test(notification.href)
+    ? `<a class="notification-link" href="${escapeAttribute(notification.href)}" target="_blank" rel="noreferrer">Open</a>`
+    : "";
+
+  return `
+    <article class="notification-item ${notification.isUnread ? "is-unread" : ""}">
+      <span class="notification-icon chip-${escapeAttribute(notification.variant)}">
+        <i class="bi ${escapeAttribute(notification.icon)}" aria-hidden="true"></i>
+      </span>
+      <span class="notification-copy min-w-0">
+        <strong class="text-truncate" title="${escapeAttribute(notification.title)}">${escapeHtml(notification.title)}</strong>
+        <span title="${escapeAttribute(notification.message)}">${escapeHtml(notification.message)}</span>
+        <small>${escapeHtml(formatDate(notification.createdAt))} · ${escapeHtml(notification.typeLabel)}</small>
+      </span>
+      <span class="notification-meta">
+        <span class="chip ${notification.isUnread ? "chip-purple" : "chip-neutral"}">${status}</span>
+        ${countChip}
+        ${href}
+      </span>
+    </article>
+  `;
+}
+
+async function refreshNotifications({ silent = false } = {}) {
+  [els.refreshNotificationsButton, els.refreshNotificationsMenuButton].filter(Boolean).forEach((button) => {
+    button.disabled = true;
+  });
+  try {
+    const payload = await requestJson("/api/notifications?mode=new&limit=20&offset=0");
+    state.dashboard.notifications = normalizeNotifications(payload.notifications || []);
+    state.dashboard.notificationTotal = Number(payload.total || state.dashboard.notifications.length || 0);
+    state.dashboard.errors = (state.dashboard.errors || []).filter((error) => error?.label !== "Notifications");
+    if (payload.error) state.dashboard.errors.push(payload.error);
+    renderApiAlerts();
+    renderNotifications();
+    if (!silent) notify(`Loaded ${formatNumber(state.dashboard.notifications.length)} notifications`);
+  } catch (error) {
+    notify(error.message || "Notifications could not be loaded");
+  } finally {
+    [els.refreshNotificationsButton, els.refreshNotificationsMenuButton].filter(Boolean).forEach((button) => {
+      button.disabled = false;
+    });
+  }
 }
 
 function renderSuite() {
@@ -1410,7 +1572,7 @@ function moduleMetric(key, summary) {
     POS: "POS",
     WHOLESALER: "B2B",
     MARKETPLACE: "Vendors",
-    SUPPORT: "Tickets",
+    SUPPORT: formatNumber(summary.notifications),
     DEVELOPERS: "API",
   };
   return metrics[key] || "Ready";
@@ -2237,6 +2399,7 @@ function getSummary() {
   return {
     products: products.length,
     articles: state.dashboard.articleTotal || state.dashboard.articles.length,
+    notifications: state.dashboard.notificationTotal || state.dashboard.notifications.length,
     categories: state.dashboard.categories.length || new Set(products.map((product) => product.categoryId)).size,
     orders: orders.length,
     totalOrders,
@@ -3472,6 +3635,9 @@ function escapeAttribute(value) {
 
 function bindEvents() {
   els.refreshButton.addEventListener("click", loadDashboard);
+  els.refreshNotificationsButton?.addEventListener("click", () => refreshNotifications());
+  els.refreshNotificationsMenuButton?.addEventListener("click", () => refreshNotifications());
+  els.notificationsButton?.addEventListener("click", toggleNotificationMenu);
   els.exportCsv.addEventListener("click", exportCsv);
   els.themeToggle.addEventListener("click", toggleTheme);
   els.datePreset?.addEventListener("change", updateDateRange);
@@ -3489,7 +3655,9 @@ function bindEvents() {
   els.userMenuButton.addEventListener("click", toggleUserMenu);
   els.sidebarUserButton.addEventListener("click", toggleUserMenu);
   document.addEventListener("click", closeUserMenuFromOutside);
+  document.addEventListener("click", closeNotificationMenuFromOutside);
   document.addEventListener("keydown", closeUserMenuOnEscape);
+  document.addEventListener("keydown", closeNotificationMenuOnEscape);
 
   els.searchInput.addEventListener("input", renderProducts);
   els.categoryFilter.addEventListener("change", renderProducts);
@@ -3593,6 +3761,7 @@ function bindEvents() {
 
     const viewJump = event.target.closest("[data-view-jump]");
     if (viewJump) {
+      closeNotificationMenu();
       showView(viewJump.dataset.viewJump);
       return;
     }
@@ -3694,15 +3863,38 @@ function setTheme(theme) {
 function toggleUserMenu(event) {
   event.preventDefault();
   event.stopPropagation();
+  closeNotificationMenu();
   const menu = els.userMenu.querySelector(".dropdown-menu");
   const isOpen = menu.classList.toggle("show");
   els.userMenu.classList.toggle("is-open", isOpen);
   els.userMenuButton.setAttribute("aria-expanded", String(isOpen));
 }
 
+function toggleNotificationMenu(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  if (!els.notificationMenu) return;
+
+  closeUserMenu();
+  const isOpen = !els.notificationMenu.classList.contains("is-open");
+  els.notificationMenu.classList.toggle("is-open", isOpen);
+  els.notificationsButton?.setAttribute("aria-expanded", String(isOpen));
+
+  if (isOpen) {
+    renderNotifications();
+    refreshNotifications({ silent: true });
+  }
+}
+
 function closeUserMenuFromOutside(event) {
   if (!els.userMenu.contains(event.target) && !els.sidebarUserButton.contains(event.target)) {
     closeUserMenu();
+  }
+}
+
+function closeNotificationMenuFromOutside(event) {
+  if (els.notificationMenu && !els.notificationMenu.contains(event.target)) {
+    closeNotificationMenu();
   }
 }
 
@@ -3716,11 +3908,22 @@ function closeUserMenuOnEscape(event) {
   }
 }
 
+function closeNotificationMenuOnEscape(event) {
+  if (event.key === "Escape") {
+    closeNotificationMenu();
+  }
+}
+
 function closeUserMenu() {
   const menu = els.userMenu.querySelector(".dropdown-menu");
   menu.classList.remove("show");
   els.userMenu.classList.remove("is-open");
   els.userMenuButton.setAttribute("aria-expanded", "false");
+}
+
+function closeNotificationMenu() {
+  els.notificationMenu?.classList.remove("is-open");
+  els.notificationsButton?.setAttribute("aria-expanded", "false");
 }
 
 async function init() {

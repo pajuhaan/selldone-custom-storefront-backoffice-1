@@ -142,6 +142,7 @@ function assertUsablePayload(payload, path) {
     Array.isArray(payload.articles) ||
     Array.isArray(payload.timeline) ||
     Array.isArray(payload.tags) ||
+    Array.isArray(payload.notifications) ||
     Array.isArray(payload.categories) ||
     Array.isArray(payload.folders) ||
     Array.isArray(payload.orders) ||
@@ -249,7 +250,16 @@ function shouldSkipGuardLog(path) {
 }
 
 export async function dashboardPayload(session) {
-  const [productsResult, categoriesResult, ordersResult, analyticsResult, blogsResult, blogTimelineResult, blogTagsResult] = await Promise.all([
+  const [
+    productsResult,
+    categoriesResult,
+    ordersResult,
+    analyticsResult,
+    blogsResult,
+    blogTimelineResult,
+    blogTagsResult,
+    notificationsResult,
+  ] = await Promise.all([
     callProductsEndpoint(session),
     callCategoriesEndpoint(session),
     callDashboardEndpoint(session, ENDPOINTS.orders),
@@ -257,6 +267,7 @@ export async function dashboardPayload(session) {
     callBlogsEndpoint(session),
     callBlogTimelineEndpoint(session),
     callBlogTagsEndpoint(session),
+    callNotificationsEndpoint(session),
   ]);
   const productsPayload = productsResult.data;
   const categoriesPayload = categoriesResult.data;
@@ -265,10 +276,21 @@ export async function dashboardPayload(session) {
   const blogsPayload = blogsResult.data;
   const blogTimelinePayload = blogTimelineResult.data;
   const blogTagsPayload = blogTagsResult.data;
-  const errors = [productsResult, categoriesResult, ordersResult, analyticsResult, blogsResult, blogTimelineResult, blogTagsResult]
+  const notificationsPayload = notificationsResult.data;
+  const errors = [
+    productsResult,
+    categoriesResult,
+    ordersResult,
+    analyticsResult,
+    blogsResult,
+    blogTimelineResult,
+    blogTagsResult,
+    notificationsResult,
+  ]
     .filter((result) => !result.ok)
     .map((result) => result.error);
   const categories = categoriesPayload.categories || categoriesPayload.folders || [];
+  const notifications = notificationsPayload.notifications || [];
 
   return {
     fetchedAt: new Date().toISOString(),
@@ -286,6 +308,8 @@ export async function dashboardPayload(session) {
     articleTotal: blogsPayload.total || articleListFromPayload(blogsPayload).length || 0,
     blogTimeline: articleListFromPayload({ articles: blogTimelinePayload.timeline, ...blogTimelinePayload }),
     blogTags: blogTagsPayload.tags || [],
+    notifications,
+    notificationTotal: notificationsPayload.total || notifications.length,
     analytics: {
       window: { days: 30, offset: 0 },
       data: analyticsPayload.data || [],
@@ -303,6 +327,16 @@ export async function callProductsEndpoint(session) {
 
 export async function callBlogsEndpoint(session) {
   return callDashboardEndpoint(session, ENDPOINTS.blogs);
+}
+
+export async function callNotificationsEndpoint(session, query = {}) {
+  return callDashboardEndpoint(session, {
+    ...ENDPOINTS.notifications,
+    query: {
+      ...ENDPOINTS.notifications.query,
+      ...query,
+    },
+  });
 }
 
 async function callBlogTimelineEndpoint(session) {

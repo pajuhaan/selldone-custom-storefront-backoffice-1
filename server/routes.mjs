@@ -7,6 +7,7 @@ import {
   articleIdFromApiPath,
   articleListFromPayload,
   callBlogsEndpoint,
+  callNotificationsEndpoint,
   callProductsEndpoint,
   dashboardPayload,
   fallbackUserProfile,
@@ -135,6 +136,32 @@ export function createRequestHandler() {
           count: articleListFromPayload(result.data).length,
           total: result.data.total || articleListFromPayload(result.data).length || 0,
           articles: articleListFromPayload(result.data),
+          error: result.error || null,
+        });
+        return;
+      }
+
+      if (url.pathname === "/api/notifications" && req.method === "GET") {
+        const session = getSession(req, res);
+        const token = await ensureAccessToken(session);
+        if (!token) {
+          sendJson(res, 401, { error: "Authentication required" });
+          return;
+        }
+
+        const mode = url.searchParams.get("mode") === "unread" ? "unread" : "new";
+        const limit = clampNumber(url.searchParams.get("limit"), 1, 20, 20);
+        const offset = clampNumber(url.searchParams.get("offset"), 0, Number.MAX_SAFE_INTEGER, 0);
+        const result = await callNotificationsEndpoint(session, { mode, limit, offset, shop_id: SHOP_ID });
+        const notifications = Array.isArray(result.data.notifications) ? result.data.notifications : [];
+        sendJson(res, result.ok ? 200 : result.error.status || 502, {
+          ok: result.ok,
+          source: result.source,
+          apiBaseUrl: API_BASE,
+          endpoint: publicEndpointConfig().notifications,
+          count: notifications.length,
+          total: result.data.total || notifications.length,
+          notifications,
           error: result.error || null,
         });
         return;
@@ -330,4 +357,10 @@ async function saveBlogArticle(session, payload, tags) {
 function sanitizeArticleTags(value) {
   const source = typeof value === "string" ? value.split(",") : Array.isArray(value) ? value : [];
   return Array.from(new Set(source.map((item) => String(item || "").trim()).filter(Boolean))).slice(0, 24);
+}
+
+function clampNumber(value, min, max, fallback) {
+  const number = Number.parseInt(value, 10);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(max, Math.max(min, number));
 }

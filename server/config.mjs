@@ -124,6 +124,17 @@ function buildEndpoints(shopId) {
       fallback: { tags: [] },
       query: {},
     },
+    notifications: {
+      label: "Notifications",
+      path: "/notifications",
+      fallback: { notifications: [], total: 0 },
+      query: {
+        shop_id: shopId,
+        offset: 0,
+        limit: 20,
+        mode: "new",
+      },
+    },
   };
 }
 
