@@ -1,5 +1,7 @@
 # Selldone Custom Storefront and Backoffice
 
+[![GitHub](https://img.shields.io/badge/GitHub-Repository-181717?logo=github&logoColor=white)](https://github.com/pajuhaan/selldone-custom-storefront-backoffice-1)
+
 Build and self-host a custom storefront and backoffice dashboard on top of Selldone Cloud Commerce.
 
 This open-source starter is for teams that want full control over their customer-facing storefront, admin UI, hosting, and deployment while keeping the hard commerce infrastructure in Selldone. Deploy it on your own server, connect it to a Selldone shop, and let Selldone handle the commerce engine, including shop data, products, orders, customers, inventory, checkout, payments, and ongoing platform updates.
