@@ -1,12 +1,14 @@
 import { createCustomerFeature } from "./features/customers.js";
+import { createMessagesFeature } from "./features/messages.js";
+import { createPaymentFeature } from "./features/payments.js";
 import { createSelldoneDirectClient } from "./features/selldone-direct.js";
+import { resolveSelldoneRecordImage as resolveSelldoneImageRecord } from "./features/selldone-images.js";
 
 const LOW_STOCK_LIMIT = 8;
 const LOCAL_APP_URL = "http://localhost:5173/dashboard/";
 const AUTH_REDIRECT_KEY = "pajulina_auth_redirect_started";
 const CONSENT_REDIRECT_KEY = "pajulina_consent_redirect_started";
 const THEME_KEY = "pajulina_dashboard_theme_v2";
-const SELLDONE_CDN_BASE = "https://cdn.selldone.com/app";
 
 const VIEW_META = {
   overview: {
@@ -23,6 +25,11 @@ const VIEW_META = {
     title: "Orders & Fulfillment",
     eyebrow: "Process Center",
     subtitle: () => "Manage, track, and fulfill customer orders seamlessly.",
+  },
+  payments: {
+    title: "Payment Gateways",
+    eyebrow: "Accounting",
+    subtitle: () => "Manage checkout gateways, live mode, provider settings, and recent payment transactions.",
   },
   products: {
     title: "Products",
@@ -165,7 +172,7 @@ const MODULE_CATALOG = [
     group: "Finance",
     icon: "bi-wallet2",
     body: "Financial accounts, payouts, gift cards, vendor payments, and monetization signals.",
-    route: "analytics",
+    route: "payments",
     scopes: [
       "backoffice:finance:read",
       "backoffice:finance:write",
@@ -320,6 +327,13 @@ const state = {
     orders: [],
     customers: [],
     customerDetails: {},
+    contacts: [],
+    contactTotal: 0,
+    paymentGateways: [],
+    availableGateways: [],
+    gatewayTransactions: [],
+    gatewayTransactionTotal: 0,
+    gatewayCurrency: "USD",
     articles: [],
     blogTimeline: [],
     blogTags: [],
@@ -342,6 +356,8 @@ const state = {
   moduleSearch: "",
   editingProductId: null,
   editingCustomerId: null,
+  editingGatewayCode: null,
+  activeGatewayCode: null,
   editingArticleId: null,
 };
 
@@ -355,7 +371,6 @@ const els = {
   openShop: document.getElementById("openShop"),
   syncTime: document.getElementById("syncTime"),
   refreshButton: document.getElementById("refreshButton"),
-  exportCsv: document.getElementById("exportCsv"),
   themeToggle: document.getElementById("themeToggle"),
   datePreset: document.getElementById("datePreset"),
   dateRangeLabel: document.getElementById("dateRangeLabel"),
@@ -370,17 +385,13 @@ const els = {
   pageEyebrow: document.getElementById("pageEyebrow"),
   pageSubtitle: document.getElementById("pageSubtitle"),
   userMenu: document.getElementById("userMenu"),
-  userMenuButton: document.getElementById("userMenuButton"),
   sidebarUserButton: document.getElementById("sidebarUserButton"),
-  userMenuLabel: document.getElementById("userMenuLabel"),
   userMenuShop: document.getElementById("userMenuShop"),
   userEmail: document.getElementById("userEmail"),
   sidebarUserName: document.getElementById("sidebarUserName"),
   sidebarUserRole: document.getElementById("sidebarUserRole"),
-  userAvatarImage: document.getElementById("userAvatarImage"),
   userAvatarLarge: document.getElementById("userAvatarLarge"),
   sidebarAvatarImage: document.getElementById("sidebarAvatarImage"),
-  userAvatarFallback: document.getElementById("userAvatarFallback"),
   userAvatarLargeFallback: document.getElementById("userAvatarLargeFallback"),
   sidebarAvatarFallback: document.getElementById("sidebarAvatarFallback"),
   apiAlerts: document.getElementById("apiAlerts"),
@@ -393,11 +404,18 @@ const els = {
   notificationsPanel: document.getElementById("notificationsPanel"),
   notificationList: document.getElementById("notificationList"),
   notificationDropdownList: document.getElementById("notificationDropdownList"),
+  messageMenu: document.getElementById("messageMenu"),
+  messageDropdown: document.getElementById("messageDropdown"),
+  messagesButton: document.getElementById("messagesButton"),
+  messageBadge: document.getElementById("messageBadge"),
+  refreshMessagesMenuButton: document.getElementById("refreshMessagesMenuButton"),
+  messageDropdownList: document.getElementById("messageDropdownList"),
   overviewKpis: document.getElementById("overviewKpis"),
   suiteKpis: document.getElementById("suiteKpis"),
   productKpis: document.getElementById("productKpis"),
   blogKpis: document.getElementById("blogKpis"),
   orderKpis: document.getElementById("orderKpis"),
+  paymentKpis: document.getElementById("paymentKpis"),
   customerKpis: document.getElementById("customerKpis"),
   marketingKpis: document.getElementById("marketingKpis"),
   analyticsKpis: document.getElementById("analyticsKpis"),
@@ -446,6 +464,15 @@ const els = {
   orderRows: document.getElementById("orderRows"),
   shippingPerformance: document.getElementById("shippingPerformance"),
   orderTimeline: document.getElementById("orderTimeline"),
+  gatewayRows: document.getElementById("gatewayRows"),
+  gatewayCurrencyFilter: document.getElementById("gatewayCurrencyFilter"),
+  refreshGatewaysButton: document.getElementById("refreshGatewaysButton"),
+  addGatewayButton: document.getElementById("addGatewayButton"),
+  gatewayHealth: document.getElementById("gatewayHealth"),
+  availableGatewayList: document.getElementById("availableGatewayList"),
+  gatewayTransactionMeta: document.getElementById("gatewayTransactionMeta"),
+  gatewayTransactionRows: document.getElementById("gatewayTransactionRows"),
+  refreshGatewayTransactionsButton: document.getElementById("refreshGatewayTransactionsButton"),
   campaignRows: document.getElementById("campaignRows"),
   marketingFunnel: document.getElementById("marketingFunnel"),
   audienceOverview: document.getElementById("audienceOverview"),
@@ -491,6 +518,22 @@ const els = {
   customerEditSubmit: document.getElementById("customerEditSubmit"),
   customerEditorClose: document.getElementById("customerEditorClose"),
   customerEditCancel: document.getElementById("customerEditCancel"),
+  gatewayEditor: document.getElementById("gatewayEditor"),
+  gatewayEditForm: document.getElementById("gatewayEditForm"),
+  gatewayEditOriginalCode: document.getElementById("gatewayEditOriginalCode"),
+  gatewayEditCode: document.getElementById("gatewayEditCode"),
+  gatewayEditLimit: document.getElementById("gatewayEditLimit"),
+  gatewayConfigClientId: document.getElementById("gatewayConfigClientId"),
+  gatewayEditEnable: document.getElementById("gatewayEditEnable"),
+  gatewayEditLivemode: document.getElementById("gatewayEditLivemode"),
+  gatewayEditManual: document.getElementById("gatewayEditManual"),
+  gatewayConfigMethods: document.getElementById("gatewayConfigMethods"),
+  gatewayEditPublic: document.getElementById("gatewayEditPublic"),
+  gatewayEditPrivate: document.getElementById("gatewayEditPrivate"),
+  gatewayConfigConnect: document.getElementById("gatewayConfigConnect"),
+  gatewayEditSubmit: document.getElementById("gatewayEditSubmit"),
+  gatewayEditorClose: document.getElementById("gatewayEditorClose"),
+  gatewayEditCancel: document.getElementById("gatewayEditCancel"),
   articleEditor: document.getElementById("articleEditor"),
   articleEditForm: document.getElementById("articleEditForm"),
   articleEditId: document.getElementById("articleEditId"),
@@ -514,21 +557,29 @@ const els = {
 };
 
 function formatMoney(value, currency = "USD", digits = 0) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: digits,
-  }).format(Number(value || 0));
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency,
+      maximumFractionDigits: digits,
+    }).format(Number(value || 0));
+  } catch {
+    return `${formatNumber(value)} ${String(currency || "").trim() || "USD"}`;
+  }
 }
 
 function formatCompactMoney(value, currency = "USD", digits = 1) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency,
-    notation: "compact",
-    compactDisplay: "short",
-    maximumFractionDigits: digits,
-  }).format(Number(value || 0));
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency,
+      notation: "compact",
+      compactDisplay: "short",
+      maximumFractionDigits: digits,
+    }).format(Number(value || 0));
+  } catch {
+    return `${formatCompactNumber(value, digits)} ${String(currency || "").trim() || "USD"}`;
+  }
 }
 
 function formatNumber(value) {
@@ -695,16 +746,13 @@ function renderUserProfile(user) {
   const email = user.email || "Selldone account";
   const initials = getInitials(name).slice(0, 1);
 
-  els.userMenuLabel.textContent = name;
   els.userMenuShop.textContent = name;
   els.userEmail.textContent = email;
   els.sidebarUserName.textContent = name;
   els.sidebarUserRole.textContent = email || "Admin";
-  els.userAvatarFallback.textContent = initials;
   els.userAvatarLargeFallback.textContent = initials;
   els.sidebarAvatarFallback.textContent = initials;
 
-  setAvatarImage(els.userAvatarImage, user.avatarUrl);
   setAvatarImage(els.userAvatarLarge, user.avatarUrl);
   setAvatarImage(els.sidebarAvatarImage, user.avatarUrl);
 }
@@ -731,12 +779,19 @@ async function loadDashboard() {
     state.dashboard.categories = normalizeCategories(dashboard.categories || []);
     state.dashboard.orders = normalizeOrders(dashboard.orders || []);
     state.dashboard.customers = normalizeCustomers(dashboard.customers || []);
+    state.dashboard.contacts = normalizeContacts(dashboard.contacts || []);
+    state.dashboard.paymentGateways = normalizePaymentGateways(dashboard.paymentGateways || []);
+    state.dashboard.availableGateways = normalizeAvailableGateways(dashboard.availableGateways || []);
+    state.dashboard.gatewayTransactions = normalizeGatewayTransactions(dashboard.gatewayTransactions || []);
+    state.dashboard.gatewayTransactionTotal = Number(dashboard.gatewayTransactionTotal || state.dashboard.gatewayTransactions.length || 0);
+    state.dashboard.gatewayCurrency = dashboard.gatewayCurrency || state.session?.shop?.currency || state.dashboard.products[0]?.currency || "USD";
     state.dashboard.articles = normalizeArticles(dashboard.articles || []);
     state.dashboard.blogTimeline = normalizeArticles(dashboard.blogTimeline || []);
     state.dashboard.blogTags = normalizeArticleTags(dashboard.blogTags || []);
     state.dashboard.notifications = normalizeNotifications(dashboard.notifications || []);
     state.dashboard.totalOrders = Number(dashboard.totalOrders || state.dashboard.orders.length || 0);
     state.dashboard.customerTotal = Number(dashboard.customerTotal || state.dashboard.customers.length || 0);
+    state.dashboard.contactTotal = Number(dashboard.contactTotal || state.dashboard.contacts.length || 0);
     state.dashboard.articleTotal = Number(dashboard.articleTotal || state.dashboard.articles.length || 0);
     state.dashboard.notificationTotal = Number(dashboard.notificationTotal || state.dashboard.notifications.length || 0);
     state.dashboard.orderStatuses = dashboard.orderStatuses || state.dashboard.orderStatuses;
@@ -791,6 +846,16 @@ function setLoading(isLoading) {
     if (els.articleRows) {
       els.articleRows.innerHTML = Array.from({ length: 6 })
         .map(() => '<tr class="skeleton-row"><td>Loading</td><td>Loading</td><td>Loading</td><td>Loading</td><td>Loading</td><td>Loading</td><td>Loading</td></tr>')
+        .join("");
+    }
+    if (els.gatewayRows) {
+      els.gatewayRows.innerHTML = Array.from({ length: 5 })
+        .map(() => '<tr class="skeleton-row"><td>Loading</td><td>Loading</td><td>Loading</td><td>Loading</td><td>Loading</td><td>Loading</td></tr>')
+        .join("");
+    }
+    if (els.gatewayTransactionRows) {
+      els.gatewayTransactionRows.innerHTML = Array.from({ length: 5 })
+        .map(() => '<tr class="skeleton-row"><td>Loading</td><td>Loading</td><td>Loading</td><td>Loading</td><td>Loading</td><td>Loading</td></tr>')
         .join("");
     }
   }
@@ -931,122 +996,8 @@ function resolveArticleImage(article = {}) {
 }
 
 function resolveSelldoneRecordImage(record = {}, options = {}) {
-  const candidates = [];
-  [
-    record.image_url,
-    record.icon_url,
-    record.thumbnail_url,
-    record.cover_url,
-    record.photo_url,
-    record.main_image,
-    record.image_path,
-    record.icon_path,
-    record.path,
-    record.icon,
-    record.image,
-    record.thumbnail,
-    record.cover,
-    record.photo,
-    record.images,
-    record.gallery,
-    record.photos,
-    record.medias,
-    record.product_images,
-    record.assets,
-    record.parent?.image_url,
-    record.parent?.icon_url,
-    record.parent?.thumbnail_url,
-    record.parent?.cover_url,
-    record.parent?.image,
-    record.parent?.icon,
-    record.parent?.thumbnail,
-    record.parent?.cover,
-  ].forEach((value) => collectImageCandidates(value, candidates));
-
-  return candidates.map((candidate) => toSelldoneImageUrl(candidate, options)).find(Boolean) || "";
-}
-
-function collectImageCandidates(value, candidates) {
-  if (!value) return;
-
-  if (typeof value === "string") {
-    value
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean)
-      .forEach((item) => candidates.push(item));
-    return;
-  }
-
-  if (Array.isArray(value)) {
-    value.forEach((item) => collectImageCandidates(item, candidates));
-    return;
-  }
-
-  if (typeof value === "object") {
-    [
-      "url",
-      "src",
-      "path",
-      "file",
-      "filename",
-      "name",
-      "image",
-      "icon",
-      "thumbnail",
-      "small",
-      "medium",
-      "large",
-      "original",
-    ].forEach((key) => collectImageCandidates(value[key], candidates));
-  }
-}
-
-function toSelldoneImageUrl(value, options = {}) {
-  const source = String(value || "").trim();
-  if (!source || source === "[object Object]" || source.toLowerCase() === "null") return "";
-  if (/^data:image\//i.test(source)) return source;
-  if (/^https?:\/\//i.test(source)) return withSelldoneThumbnailSize(source, options.size);
-  if (source.startsWith("//")) return withSelldoneThumbnailSize(`https:${source}`, options.size);
-
-  const shopId = state.session?.shop?.id || 14952;
-  const path = source.replace(/^\/+/, "");
-
-  if (path.startsWith("app/")) return withSelldoneThumbnailSize(`https://cdn.selldone.com/${path}`, options.size);
-  if (path.startsWith("shops/")) return withSelldoneThumbnailSize(`${SELLDONE_CDN_BASE}/${path}`, options.size);
-  if (path.startsWith("shops_")) return withSelldoneThumbnailSize(`${SELLDONE_CDN_BASE}/${path.replaceAll("_", "/")}`, options.size);
-  if (path.includes("app/shops/")) {
-    return withSelldoneThumbnailSize(`https://cdn.selldone.com/${path.slice(path.indexOf("app/shops/"))}`, options.size);
-  }
-
-  const compactShopPath = path.match(/^shops(\d+)(products|categories|articles|pages|folders|vendors|logos|baskets|users)[_/](.+)$/i);
-  if (compactShopPath) {
-    const [, compactShopId, scope, rest] = compactShopPath;
-    return withSelldoneThumbnailSize(`${SELLDONE_CDN_BASE}/shops/${compactShopId}/${scope}/${rest.replaceAll("_", "/")}`, options.size);
-  }
-
-  const underscoredPath = path.includes("_") ? path.replaceAll("_", "/") : "";
-  if (underscoredPath.startsWith("shops/")) {
-    return withSelldoneThumbnailSize(`${SELLDONE_CDN_BASE}/${underscoredPath}`, options.size);
-  }
-
-  if (path.includes(`/${options.scope || "products"}/`)) {
-    return withSelldoneThumbnailSize(`${SELLDONE_CDN_BASE}/shops/${shopId}/${options.scope || "products"}/${path.split("/").pop()}`, options.size);
-  }
-
-  if (/\.(png|jpe?g|webp|gif|avif|svg)(\?.*)?$/i.test(path)) {
-    return withSelldoneThumbnailSize(`${SELLDONE_CDN_BASE}/shops/${shopId}/${options.scope || "products"}/${path}`, options.size);
-  }
-
-  return "";
-}
-
-function withSelldoneThumbnailSize(url, size) {
-  if (!size || !/^https:\/\/cdn\.selldone\.com\/app\//i.test(url)) return url;
-  if (/\.(png|jpe?g|webp|gif|avif)(\?.*)?$/i.test(url)) return url;
-  if (/(32|64|128|256|512)\.png(\?.*)?$/i.test(url)) return url;
-  if (/\.svg(\?.*)?$/i.test(url)) return url;
-  return `${url}${Number(size)}.png`;
+  const shopId = options.shopId || record.shop_id || record.shop?.id || state.session?.shop?.id || state.dashboard?.shop?.id;
+  return resolveSelldoneImageRecord(record, { ...options, shopId });
 }
 
 function normalizeProductStatus(product, quantity) {
@@ -1094,6 +1045,22 @@ function normalizeOrders(orders) {
 
 function normalizeCustomers(customers) {
   return customerFeature.normalizeCustomers(customers);
+}
+
+function normalizeContacts(contacts) {
+  return messagesFeature.normalizeContacts(contacts);
+}
+
+function normalizePaymentGateways(gateways) {
+  return paymentFeature.normalizeGateways(gateways);
+}
+
+function normalizeAvailableGateways(gateways) {
+  return paymentFeature.normalizeAvailableGateways(gateways);
+}
+
+function normalizeGatewayTransactions(transactions) {
+  return paymentFeature.normalizeTransactions(transactions);
 }
 
 function normalizeNotifications(notifications) {
@@ -1323,6 +1290,7 @@ function sumNumberFields(row, keys) {
 
 function renderAll() {
   renderApiAlerts();
+  renderMessages();
   renderFilters();
   renderNavBadges();
   renderOverview();
@@ -1333,6 +1301,7 @@ function renderAll() {
   renderProductDetail();
   renderBlog();
   renderOrders();
+  renderPayments();
   renderMarketing();
   renderAnalytics();
   renderSettings();
@@ -1754,7 +1723,7 @@ function countScopesForGroup(group) {
 
 function renderSuiteRoadmap(modules) {
   const candidates = modules
-    .filter((module) => !["overview", "orders", "customers", "products", "blog", "marketing", "analytics", "settings"].includes(module.route) || !module.write)
+    .filter((module) => !["overview", "orders", "payments", "customers", "products", "blog", "marketing", "analytics", "settings"].includes(module.route) || !module.write)
     .slice(0, 8);
 
   return candidates
@@ -1792,6 +1761,10 @@ function renderCustomers() {
 
 function renderCustomerDetail() {
   return customerFeature.renderCustomerDetail();
+}
+
+function renderPayments() {
+  return paymentFeature.renderPayments();
 }
 
 function renderProducts() {
@@ -3156,6 +3129,58 @@ function submitCustomerEdit(event) {
   return customerFeature.submitCustomerEdit(event);
 }
 
+function refreshPaymentGateways(options) {
+  return paymentFeature.refreshPaymentGateways(options);
+}
+
+function loadGatewayTransactions(gatewayCode, options) {
+  return paymentFeature.loadGatewayTransactions(gatewayCode, options);
+}
+
+function openGatewayEditor(gatewayCode) {
+  return paymentFeature.openGatewayEditor(gatewayCode);
+}
+
+function closeGatewayEditor() {
+  return paymentFeature.closeGatewayEditor();
+}
+
+function submitGatewayEdit(event) {
+  return paymentFeature.submitGatewayEdit(event);
+}
+
+function toggleGateway(gatewayCode) {
+  return paymentFeature.toggleGateway(gatewayCode);
+}
+
+function deleteGateway(gatewayCode) {
+  return paymentFeature.deleteGateway(gatewayCode);
+}
+
+function renderMessages() {
+  return messagesFeature.renderMessages();
+}
+
+function refreshMessages(options) {
+  return messagesFeature.refreshMessages(options);
+}
+
+function toggleMessageMenu(event) {
+  return messagesFeature.toggleMessageMenu(event);
+}
+
+function closeMessageMenu() {
+  return messagesFeature.closeMessageMenu();
+}
+
+function closeMessageMenuFromOutside(event) {
+  return messagesFeature.closeMessageMenuFromOutside(event);
+}
+
+function closeMessageMenuOnEscape(event) {
+  return messagesFeature.closeMessageMenuOnEscape(event);
+}
+
 function toggleProductMenu(button) {
   const wrapper = button.closest("[data-product-action-menu]");
   const willOpen = !wrapper.classList.contains("is-open");
@@ -3686,37 +3711,13 @@ function renderActions(mode = "low") {
     : emptyState("No items in this view", "This quick-action list is empty for the current live data.");
 }
 
-function exportCsv() {
-  const headers = ["id", "title", "sku", "category", "final_price", "currency", "quantity", "visits", "status"];
-  const rows = state.dashboard.products.map((product) =>
-    [
-      product.id,
-      product.title,
-      product.sku,
-      product.category,
-      product.finalPrice,
-      product.currency,
-      product.quantity,
-      product.visits,
-      product.status,
-    ]
-      .map((value) => `"${String(value ?? "").replaceAll('"', '""')}"`)
-      .join(","),
-  );
-  const blob = new Blob([[headers.join(","), ...rows].join("\n")], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "pajulina-live-products.csv";
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
 function renderError(message) {
   els.apiAlerts.innerHTML = `<div class="alert" role="alert"><strong>Dashboard</strong><span>${escapeHtml(message)}</span></div>`;
   els.productRows.innerHTML = tableEmpty(8, "Dashboard request failed", message);
   if (els.customerRows) els.customerRows.innerHTML = tableEmpty(8, "Customers request failed", message);
   if (els.articleRows) els.articleRows.innerHTML = tableEmpty(7, "Blog request failed", message);
+  if (els.gatewayRows) els.gatewayRows.innerHTML = tableEmpty(6, "Payment gateways request failed", message);
+  if (els.gatewayTransactionRows) els.gatewayTransactionRows.innerHTML = tableEmpty(6, "Gateway transactions request failed", message);
   els.orderRows.innerHTML = tableEmpty(8, "Orders request failed", message);
   notify(message);
 }
@@ -3825,12 +3826,53 @@ const customerFeature = createCustomerFeature({
   selldone: selldoneClient,
 });
 
+const messagesFeature = createMessagesFeature({
+  state,
+  els,
+  formatNumber,
+  formatDate,
+  getInitials,
+  escapeHtml,
+  escapeAttribute,
+  emptyState,
+  notify,
+  closeNotificationMenu,
+  closeUserMenu,
+  selldone: selldoneClient,
+});
+
+const paymentFeature = createPaymentFeature({
+  state,
+  els,
+  ACCENTS,
+  statCard,
+  formatNumber,
+  formatFitMoney,
+  formatMoney,
+  formatDate,
+  titleCase,
+  getInitials,
+  escapeHtml,
+  escapeAttribute,
+  tableEmpty,
+  emptyState,
+  statusRows,
+  renderLineChart,
+  readFirstNumber,
+  notify,
+  renderSuite,
+  renderSettings,
+  renderNavBadges,
+  selldone: selldoneClient,
+});
+
 function bindEvents() {
   els.refreshButton.addEventListener("click", loadDashboard);
   els.refreshNotificationsButton?.addEventListener("click", () => refreshNotifications());
   els.refreshNotificationsMenuButton?.addEventListener("click", () => refreshNotifications());
   els.notificationsButton?.addEventListener("click", toggleNotificationMenu);
-  els.exportCsv.addEventListener("click", exportCsv);
+  els.messagesButton?.addEventListener("click", toggleMessageMenu);
+  els.refreshMessagesMenuButton?.addEventListener("click", () => refreshMessages());
   els.themeToggle.addEventListener("click", toggleTheme);
   els.datePreset?.addEventListener("change", updateDateRange);
   els.navLinks.forEach((link) => {
@@ -3844,12 +3886,13 @@ function bindEvents() {
   });
   window.addEventListener("hashchange", () => showView(readHashView(), false));
 
-  els.userMenuButton.addEventListener("click", toggleUserMenu);
   els.sidebarUserButton.addEventListener("click", toggleUserMenu);
   document.addEventListener("click", closeUserMenuFromOutside);
   document.addEventListener("click", closeNotificationMenuFromOutside);
+  document.addEventListener("click", closeMessageMenuFromOutside);
   document.addEventListener("keydown", closeUserMenuOnEscape);
   document.addEventListener("keydown", closeNotificationMenuOnEscape);
+  document.addEventListener("keydown", closeMessageMenuOnEscape);
 
   els.searchInput.addEventListener("input", renderProducts);
   els.categoryFilter.addEventListener("change", renderProducts);
@@ -3862,6 +3905,10 @@ function bindEvents() {
   els.customerLevelFilter?.addEventListener("change", renderCustomers);
   els.customerStatusFilter?.addEventListener("change", renderCustomers);
   els.refreshCustomersButton?.addEventListener("click", () => refreshCustomers());
+  els.gatewayCurrencyFilter?.addEventListener("change", () => refreshPaymentGateways());
+  els.refreshGatewaysButton?.addEventListener("click", () => refreshPaymentGateways());
+  els.addGatewayButton?.addEventListener("click", () => openGatewayEditor());
+  els.refreshGatewayTransactionsButton?.addEventListener("click", () => loadGatewayTransactions(state.activeGatewayCode));
   els.moduleSearchInput?.addEventListener("input", () => {
     state.moduleSearch = els.moduleSearchInput.value;
     renderSuite();
@@ -3882,6 +3929,9 @@ function bindEvents() {
   els.customerEditForm?.addEventListener("submit", submitCustomerEdit);
   els.customerEditorClose?.addEventListener("click", closeCustomerEditor);
   els.customerEditCancel?.addEventListener("click", closeCustomerEditor);
+  els.gatewayEditForm?.addEventListener("submit", submitGatewayEdit);
+  els.gatewayEditorClose?.addEventListener("click", closeGatewayEditor);
+  els.gatewayEditCancel?.addEventListener("click", closeGatewayEditor);
   els.globalSearchInput.addEventListener("input", () => {
     if (state.activeView === "blog") {
       els.blogSearchInput.value = els.globalSearchInput.value;
@@ -3974,6 +4024,30 @@ function bindEvents() {
       return;
     }
 
+    const gatewayEdit = event.target.closest("[data-gateway-edit]");
+    if (gatewayEdit) {
+      openGatewayEditor(gatewayEdit.dataset.gatewayEdit);
+      return;
+    }
+
+    const gatewayDelete = event.target.closest("[data-gateway-delete]");
+    if (gatewayDelete) {
+      deleteGateway(gatewayDelete.dataset.gatewayDelete);
+      return;
+    }
+
+    const gatewayToggle = event.target.closest("[data-gateway-toggle]");
+    if (gatewayToggle) {
+      toggleGateway(gatewayToggle.dataset.gatewayToggle);
+      return;
+    }
+
+    const gatewayOpen = event.target.closest("[data-gateway-open]");
+    if (gatewayOpen && !event.target.closest("button, a, input, select, textarea")) {
+      loadGatewayTransactions(gatewayOpen.dataset.gatewayOpen);
+      return;
+    }
+
     const productOpen = event.target.closest("[data-product-open]");
     if (productOpen && !event.target.closest("button, a, input, select, textarea, [data-product-action-menu]")) {
       openProductDetail(productOpen.dataset.productOpen);
@@ -3992,6 +4066,11 @@ function bindEvents() {
 
     if (event.target.closest("[data-modal-close='customer']")) {
       closeCustomerEditor();
+      return;
+    }
+
+    if (event.target.closest("[data-modal-close='gateway']")) {
+      closeGatewayEditor();
       return;
     }
 
@@ -4022,9 +4101,14 @@ function bindEvents() {
   document.addEventListener("keydown", (event) => {
     const productOpen = event.target.closest?.("[data-product-open]");
     const customerOpen = event.target.closest?.("[data-customer-open]");
-    if (!productOpen && !customerOpen) return;
+    const gatewayOpen = event.target.closest?.("[data-gateway-open]");
+    if (!productOpen && !customerOpen && !gatewayOpen) return;
     if (!["Enter", " "].includes(event.key)) return;
     event.preventDefault();
+    if (gatewayOpen) {
+      loadGatewayTransactions(gatewayOpen.dataset.gatewayOpen);
+      return;
+    }
     if (customerOpen) {
       openCustomerDetail(customerOpen.dataset.customerOpen);
       return;
@@ -4084,6 +4168,14 @@ function showView(view = "overview", updateHash = true) {
   if (nextView === "blog" && state.session?.authenticated && !state.dashboard.articles.length) {
     refreshBlogPosts({ silent: true });
   }
+  if (
+    nextView === "payments" &&
+    state.session?.authenticated &&
+    !state.dashboard.paymentGateways.length &&
+    !state.dashboard.availableGateways.length
+  ) {
+    refreshPaymentGateways({ silent: true });
+  }
   if (nextView === "customers" && state.session?.authenticated && !state.dashboard.customers.length) {
     refreshCustomers({ silent: true });
   }
@@ -4123,10 +4215,11 @@ function toggleUserMenu(event) {
   event.preventDefault();
   event.stopPropagation();
   closeNotificationMenu();
+  closeMessageMenu();
   const menu = els.userMenu.querySelector(".dropdown-menu");
   const isOpen = menu.classList.toggle("show");
   els.userMenu.classList.toggle("is-open", isOpen);
-  els.userMenuButton.setAttribute("aria-expanded", String(isOpen));
+  els.sidebarUserButton.setAttribute("aria-expanded", String(isOpen));
 }
 
 function toggleNotificationMenu(event) {
@@ -4135,6 +4228,7 @@ function toggleNotificationMenu(event) {
   if (!els.notificationMenu) return;
 
   closeUserMenu();
+  closeMessageMenu();
   const isOpen = !els.notificationMenu.classList.contains("is-open");
   els.notificationMenu.classList.toggle("is-open", isOpen);
   els.notificationsButton?.setAttribute("aria-expanded", String(isOpen));
@@ -4164,6 +4258,7 @@ function closeUserMenuOnEscape(event) {
     closeArticleMenus();
     closeProductEditor();
     closeCustomerEditor();
+    closeGatewayEditor();
     closeArticleEditor();
   }
 }
@@ -4171,6 +4266,7 @@ function closeUserMenuOnEscape(event) {
 function closeNotificationMenuOnEscape(event) {
   if (event.key === "Escape") {
     closeNotificationMenu();
+    closeMessageMenu();
   }
 }
 
@@ -4178,7 +4274,7 @@ function closeUserMenu() {
   const menu = els.userMenu.querySelector(".dropdown-menu");
   menu.classList.remove("show");
   els.userMenu.classList.remove("is-open");
-  els.userMenuButton.setAttribute("aria-expanded", "false");
+  els.sidebarUserButton.setAttribute("aria-expanded", "false");
 }
 
 function closeNotificationMenu() {

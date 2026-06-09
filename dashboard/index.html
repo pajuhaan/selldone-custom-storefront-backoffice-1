@@ -12,7 +12,7 @@
       href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/dashboard/styles.css?v=dashboard-scaffold-20260608" />
+    <link rel="stylesheet" href="/dashboard/styles.css?v=dashboard-messages-20260609-1" />
   </head>
   <body>
     <div id="authGate" class="auth-gate">
@@ -67,6 +67,10 @@
             <span>Orders</span>
             <span id="navOrderBadge" class="nav-badge">0</span>
           </a>
+          <a class="nav-link" href="#payments" data-view="payments">
+            <i class="bi bi-credit-card-2-front" aria-hidden="true"></i>
+            <span>Payments</span>
+          </a>
           <a class="nav-link" href="#customers" data-view="customers">
             <i class="bi bi-people" aria-hidden="true"></i>
             <span>Customers</span>
@@ -105,17 +109,51 @@
             <p>Using api.selldone.com with server-side OAuth tokens.</p>
           </div>
 
-          <button id="sidebarUserButton" class="sidebar-profile" type="button" aria-label="Open user menu">
-            <span class="user-avatar-mini">
-              <img id="sidebarAvatarImage" alt="" loading="lazy" />
-              <span id="sidebarAvatarFallback">P</span>
-            </span>
-            <span class="min-w-0">
-              <strong id="sidebarUserName" class="text-truncate">Selldone user</strong>
-              <small id="sidebarUserRole" class="text-truncate">Admin</small>
-            </span>
-            <i class="bi bi-chevron-down" aria-hidden="true"></i>
-          </button>
+          <div class="dropdown user-menu sidebar-user-menu" id="userMenu">
+            <button
+              id="sidebarUserButton"
+              class="sidebar-profile"
+              type="button"
+              aria-label="Open user menu"
+              aria-haspopup="true"
+              aria-expanded="false"
+            >
+              <span class="user-avatar-mini">
+                <img id="sidebarAvatarImage" alt="" loading="lazy" />
+                <span id="sidebarAvatarFallback">P</span>
+              </span>
+              <span class="min-w-0">
+                <strong id="sidebarUserName" class="text-truncate">Selldone user</strong>
+                <small id="sidebarUserRole" class="text-truncate">Admin</small>
+              </span>
+              <i class="bi bi-chevron-down" aria-hidden="true"></i>
+            </button>
+            <ul class="dropdown-menu user-dropdown sidebar-user-dropdown" aria-labelledby="sidebarUserButton">
+              <li class="dropdown-header profile-card">
+                <span class="user-avatar-large">
+                  <img id="userAvatarLarge" alt="" loading="lazy" />
+                  <span id="userAvatarLargeFallback">P</span>
+                </span>
+                <span class="min-w-0">
+                  <strong id="userMenuShop" class="text-truncate">Pajulina</strong>
+                  <span id="userEmail" class="text-secondary small d-block text-truncate">Selldone account</span>
+                </span>
+              </li>
+              <li>
+                <a class="dropdown-item" href="/auth/start">
+                  <i class="bi bi-shield-check" aria-hidden="true"></i>
+                  Reconnect with consent
+                </a>
+              </li>
+              <li><hr class="dropdown-divider" /></li>
+              <li>
+                <a id="logoutButton" class="dropdown-item text-danger" href="/auth/logout">
+                  <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
+                  Sign out
+                </a>
+              </li>
+            </ul>
+          </div>
         </div>
       </aside>
 
@@ -160,9 +198,32 @@
             <button class="btn btn-icon" type="button" aria-label="Help">
               <i class="bi bi-question-circle-fill" aria-hidden="true"></i>
             </button>
-            <button class="btn btn-icon" type="button" aria-label="Messages">
-              <i class="bi bi-chat-square" aria-hidden="true"></i>
-            </button>
+            <div id="messageMenu" class="message-menu">
+              <button
+                id="messagesButton"
+                class="btn btn-icon"
+                type="button"
+                aria-label="Customer messages"
+                aria-haspopup="true"
+                aria-expanded="false"
+              >
+                <i class="bi bi-chat-square" aria-hidden="true"></i>
+                <span id="messageBadge" class="notification-dot is-empty">0</span>
+              </button>
+              <section id="messageDropdown" class="message-dropdown" aria-label="Customer messages">
+                <div class="notification-dropdown-head">
+                  <div>
+                    <strong>Customer Messages</strong>
+                    <span>Shop contacts and support tickets</span>
+                  </div>
+                  <button id="refreshMessagesMenuButton" class="btn btn-soft btn-sm" type="button">
+                    <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+                    <span>Refresh</span>
+                  </button>
+                </div>
+                <div id="messageDropdownList" class="message-list"></div>
+              </section>
+            </div>
             <button id="themeToggle" class="btn btn-soft theme-toggle" type="button" aria-pressed="true">
               <i class="bi bi-moon-stars" aria-hidden="true"></i>
               <span>Light</span>
@@ -171,55 +232,10 @@
               <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
               <span>Refresh</span>
             </button>
-            <button id="exportCsv" class="btn btn-soft" type="button">
-              <i class="bi bi-download" aria-hidden="true"></i>
-              <span>Export</span>
-            </button>
             <a id="openShop" class="btn btn-primary-gradient" href="#" target="_blank" rel="noreferrer">
               <i class="bi bi-shop" aria-hidden="true"></i>
               <span>Open Shop</span>
             </a>
-
-            <div class="dropdown user-menu" id="userMenu">
-              <button
-                id="userMenuButton"
-                class="btn user-menu-button dropdown-toggle"
-                type="button"
-                aria-haspopup="true"
-                aria-expanded="false"
-              >
-                <span class="user-avatar-mini">
-                  <img id="userAvatarImage" alt="" loading="lazy" />
-                  <span id="userAvatarFallback">P</span>
-                </span>
-                <span id="userMenuLabel">Selldone account</span>
-              </button>
-              <ul class="dropdown-menu dropdown-menu-end user-dropdown" aria-labelledby="userMenuButton">
-                <li class="dropdown-header profile-card">
-                  <span class="user-avatar-large">
-                    <img id="userAvatarLarge" alt="" loading="lazy" />
-                    <span id="userAvatarLargeFallback">P</span>
-                  </span>
-                  <span class="min-w-0">
-                    <strong id="userMenuShop" class="text-truncate">Pajulina</strong>
-                    <span id="userEmail" class="text-secondary small d-block text-truncate">Selldone account</span>
-                  </span>
-                </li>
-                <li>
-                  <a class="dropdown-item" href="/auth/start">
-                    <i class="bi bi-shield-check" aria-hidden="true"></i>
-                    Reconnect with consent
-                  </a>
-                </li>
-                <li><hr class="dropdown-divider" /></li>
-                <li>
-                  <a id="logoutButton" class="dropdown-item text-danger" href="/auth/logout">
-                    <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
-                    Sign out
-                  </a>
-                </li>
-              </ul>
-            </div>
           </div>
         </header>
 
@@ -250,6 +266,7 @@
             <button class="view-tab active" type="button" data-view-tab="overview"><i class="bi bi-house-door-fill"></i>Dashboard</button>
             <button class="view-tab" type="button" data-view-tab="suite"><i class="bi bi-app-indicator"></i>Suite</button>
             <button class="view-tab" type="button" data-view-tab="orders"><i class="bi bi-credit-card-2-front-fill"></i>Orders</button>
+            <button class="view-tab" type="button" data-view-tab="payments"><i class="bi bi-wallet2"></i>Payments</button>
             <button class="view-tab" type="button" data-view-tab="customers"><i class="bi bi-people-fill"></i>Customers</button>
             <button class="view-tab" type="button" data-view-tab="products"><i class="bi bi-cube-fill"></i>Products</button>
             <button class="view-tab" type="button" data-view-tab="blog"><i class="bi bi-journal-richtext"></i>Blog</button>
@@ -437,6 +454,96 @@
                   <h2>Order Timeline</h2>
                 </div>
                 <div id="orderTimeline" class="timeline-list"></div>
+              </article>
+            </div>
+          </section>
+
+          <section class="view-panel" data-view-panel="payments">
+            <div id="paymentKpis" class="kpi-grid"></div>
+
+            <div class="payments-layout">
+              <article class="panel-card payment-gateway-panel span-2">
+                <div class="panel-header product-header">
+                  <div>
+                    <h2>Payment Gateways</h2>
+                    <p>Configured Selldone checkout gateways from the backoffice API.</p>
+                  </div>
+                  <div class="catalog-controls">
+                    <select id="gatewayCurrencyFilter" class="filter-select" aria-label="Available gateway currency">
+                      <option value="USD">USD</option>
+                      <option value="EUR">EUR</option>
+                      <option value="AED">AED</option>
+                      <option value="GBP">GBP</option>
+                      <option value="IRR">IRR</option>
+                    </select>
+                    <button id="refreshGatewaysButton" class="btn btn-soft" type="button">
+                      <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+                      <span>Refresh Gateways</span>
+                    </button>
+                    <button id="addGatewayButton" class="btn btn-primary-gradient" type="button">
+                      <i class="bi bi-plus-lg" aria-hidden="true"></i>
+                      <span>Add Gateway</span>
+                    </button>
+                  </div>
+                </div>
+                <div class="table-responsive">
+                  <table class="table data-table payment-table">
+                    <thead>
+                      <tr>
+                        <th>Gateway</th>
+                        <th>Mode</th>
+                        <th>Limit</th>
+                        <th>Config</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody id="gatewayRows"></tbody>
+                  </table>
+                </div>
+              </article>
+
+              <aside class="product-rail payment-rail">
+                <article class="panel-card">
+                  <div class="panel-header">
+                    <h2>Gateway Health</h2>
+                  </div>
+                  <div id="gatewayHealth" class="status-list"></div>
+                </article>
+                <article class="panel-card">
+                  <div class="panel-header">
+                    <h2>Available Gateways</h2>
+                  </div>
+                  <div id="availableGatewayList" class="compact-list"></div>
+                </article>
+              </aside>
+
+              <article class="panel-card span-2">
+                <div class="panel-header">
+                  <div>
+                    <h2>Recent Transactions</h2>
+                    <p id="gatewayTransactionMeta">Select a gateway to load payment transactions.</p>
+                  </div>
+                  <button id="refreshGatewayTransactionsButton" class="btn btn-soft btn-sm" type="button">
+                    <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+                    <span>Refresh</span>
+                  </button>
+                </div>
+                <div class="table-responsive">
+                  <table class="table data-table payment-transaction-table">
+                    <thead>
+                      <tr>
+                        <th>Payment</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Risk</th>
+                        <th>Issued</th>
+                        <th>Paid</th>
+                      </tr>
+                    </thead>
+                    <tbody id="gatewayTransactionRows"></tbody>
+                  </table>
+                </div>
               </article>
             </div>
           </section>
@@ -1007,6 +1114,80 @@
       </section>
     </div>
 
+    <div id="gatewayEditor" class="modal-shell" aria-hidden="true">
+      <div class="modal-scrim" data-modal-close="gateway"></div>
+      <section class="modal-panel modal-panel-wide" role="dialog" aria-modal="true" aria-labelledby="gatewayEditorTitle">
+        <div class="modal-header">
+          <div>
+            <div class="page-eyebrow">Payment Gateway</div>
+            <h2 id="gatewayEditorTitle">Configure Gateway</h2>
+          </div>
+          <button id="gatewayEditorClose" class="btn btn-icon" type="button" aria-label="Close gateway editor">
+            <i class="bi bi-x-lg" aria-hidden="true"></i>
+          </button>
+        </div>
+        <form id="gatewayEditForm" class="modal-form">
+          <input id="gatewayEditOriginalCode" type="hidden" />
+          <div class="form-grid-3">
+            <label>
+              <span>Gateway Code</span>
+              <select id="gatewayEditCode" name="gateway_code" required></select>
+            </label>
+            <label>
+              <span>Limit</span>
+              <input id="gatewayEditLimit" name="limit" type="number" min="0" step="0.01" />
+            </label>
+            <label>
+              <span>Client ID</span>
+              <input id="gatewayConfigClientId" name="client_id" type="text" maxlength="255" autocomplete="off" />
+            </label>
+          </div>
+          <div class="form-grid-3">
+            <label class="form-check-row">
+              <input id="gatewayEditEnable" name="enable" type="checkbox" />
+              <span>Enabled at checkout</span>
+            </label>
+            <label class="form-check-row">
+              <input id="gatewayEditLivemode" name="livemode" type="checkbox" />
+              <span>Live mode</span>
+            </label>
+            <label class="form-check-row">
+              <input id="gatewayEditManual" name="manual" type="checkbox" />
+              <span>Manual handling</span>
+            </label>
+          </div>
+          <label>
+            <span>Payment Methods</span>
+            <input id="gatewayConfigMethods" name="methods" type="text" placeholder="card, klarna, ideal" />
+            <small class="form-help">For supported gateways, keep <code>card</code> included. Leave empty to skip method config.</small>
+          </label>
+          <div class="form-grid-2">
+            <label>
+              <span>Public Credentials JSON</span>
+              <textarea id="gatewayEditPublic" name="public" rows="5" autocomplete="off" spellcheck="false" placeholder='{"publishable_key":"..."}'></textarea>
+              <small class="form-help">Sensitive values are sent only to Selldone and are not shown after save.</small>
+            </label>
+            <label>
+              <span>Private Credentials JSON</span>
+              <textarea id="gatewayEditPrivate" name="private" rows="5" autocomplete="off" spellcheck="false" placeholder='{"secret_key":"..."}'></textarea>
+              <small class="form-help warning">Do not paste credentials unless you are intentionally configuring this provider.</small>
+            </label>
+          </div>
+          <label class="form-check-row">
+            <input id="gatewayConfigConnect" name="connect" type="checkbox" />
+            <span>Connected account mode</span>
+          </label>
+          <div class="modal-actions">
+            <button id="gatewayEditCancel" class="btn btn-soft" type="button">Cancel</button>
+            <button id="gatewayEditSubmit" class="btn btn-primary-gradient" type="submit">
+              <i class="bi bi-check2" aria-hidden="true"></i>
+              <span>Save Gateway</span>
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+
     <div id="articleEditor" class="modal-shell" aria-hidden="true">
       <div class="modal-scrim" data-modal-close="article"></div>
       <section class="modal-panel modal-panel-wide" role="dialog" aria-modal="true" aria-labelledby="articleEditorTitle">
@@ -1092,6 +1273,6 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script type="module" src="/dashboard/app.js?v=dashboard-direct-api-20260608-1"></script>
+    <script type="module" src="/dashboard/app.js?v=dashboard-messages-20260609-1"></script>
   </body>
 </html>

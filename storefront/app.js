@@ -1,3 +1,5 @@
+import { selldoneImagePathToUrl } from "/dashboard/features/selldone-images.js";
+
 const SPRITE_COLUMNS = 4;
 const SPRITE_ROWS = 4;
 const CART_KEY = "pajulina_storefront_cart_v1";
@@ -148,7 +150,7 @@ function normalizeCategoryCardSource(rawCategory, index = 0) {
   );
   if (typeof imageSource === "number") return imageSource;
   if (imageSource && typeof imageSource === "string") {
-    const mapped = pickImagePath(imageSource);
+    const mapped = pickImagePath(imageSource, { scope: "categories", shopId: rawCategory?.shop_id || rawCategory?.shop?.id });
     return mapped || imageSource;
   }
   return toNumber(rawCategory?.image_index, rawCategory?.icon_index, rawCategory?.sprite_index, index % (SPRITE_COLUMNS * SPRITE_ROWS));
@@ -232,24 +234,9 @@ function sanitizeActiveCategory() {
   }
 }
 
-function pickImagePath(value) {
+function pickImagePath(value, options = {}) {
   if (typeof value !== "string") return null;
-  const valueClean = value.trim();
-  if (!valueClean) return null;
-  if (/^https?:\/\//i.test(valueClean) || valueClean.startsWith("//")) return valueClean;
-  if (/^(data|blob):/i.test(valueClean)) return valueClean;
-
-  const cleanPath = valueClean.replace(/^\/+/, "");
-  if (/^shops[_/]/i.test(cleanPath)) {
-    return `${metaContent("selldone-cdn-images", "https://selldone.com/cdn-shop-images-1").replace(/\/$/, "")}/${cleanPath}`;
-  }
-
-  if (window.CDN?.GET_SHOP_IMAGE_PATH) {
-    const cdnPath = window.CDN.GET_SHOP_IMAGE_PATH(cleanPath);
-    if (cdnPath) return cdnPath;
-  }
-
-  return `${metaContent("storage-redirect-host", "https://cdn.selldone.com").replace(/\/$/, "")}/${cleanPath}`;
+  return selldoneImagePathToUrl(value, options) || null;
 }
 
 function extractImages(rawProduct) {
@@ -260,14 +247,14 @@ function extractImages(rawProduct) {
       return;
     }
     if (entry && typeof entry === "string") {
-      const mapped = pickImagePath(entry);
+      const mapped = pickImagePath(entry, { scope: "products", shopId: rawProduct?.shop_id || rawProduct?.shop?.id });
       if (mapped) collected.push(mapped);
       return;
     }
     if (entry && typeof entry === "object") {
       const source = firstNonNull(entry.icon, entry.image, entry.path, entry.url, entry.filename);
       if (source) {
-        const mapped = typeof source === "number" ? source : pickImagePath(source);
+        const mapped = typeof source === "number" ? source : pickImagePath(source, { scope: "products", shopId: entry.shop_id || rawProduct?.shop_id || rawProduct?.shop?.id });
         if (mapped) collected.push(mapped);
       }
     }
@@ -335,6 +322,7 @@ function mapProduct(raw) {
   return {
     source: DATA_SOURCE.xapi,
     id: String(productId),
+    shopId: firstNonNull(raw.shop_id, raw.shop?.id, raw.shopId),
     title,
     brand,
     category: categoryValue,
@@ -368,7 +356,7 @@ function renderProductImage(item, className = "product-sprite", media = null) {
   const target = media == null ? item?.image : media;
   if (typeof target === "number") return renderSprite(target, className);
   if (typeof target === "string" && target.trim()) {
-    const source = pickImagePath(target) || target;
+    const source = pickImagePath(target, { scope: "products", shopId: item?.shopId }) || target;
     return `<img class="${className}" src="${escapeHtml(source)}" alt="${escapeHtml(item?.title || "Product image")}" loading="lazy" />`;
   }
   return renderSprite(toNumber(item?.image, 0), className);
@@ -604,7 +592,7 @@ function normalizeGallery(item) {
     if (typeof candidate === "string") {
       const mapped = candidate.trim();
       if (!mapped) return;
-      const normalized = pickImagePath(mapped);
+      const normalized = pickImagePath(mapped, { scope: "products", shopId: item?.shopId });
       if (!normalized) return;
       const key = `s:${normalized}`;
       if (seen.has(key)) return;
@@ -1264,7 +1252,7 @@ function renderCategoryMedia(media) {
     return renderSprite(media, "category-sprite");
   }
   if (typeof media === "string" && media.trim()) {
-    const source = pickImagePath(media) || media;
+    const source = pickImagePath(media, { scope: "categories" }) || media;
     if (source && typeof source === "string" && source.trim()) {
       return `<img class="category-sprite" src="${escapeHtml(source)}" alt="category image" loading="lazy" />`;
     }
