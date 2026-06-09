@@ -428,6 +428,8 @@ const els = {
   customerLevelFilter: document.getElementById("customerLevelFilter"),
   customerStatusFilter: document.getElementById("customerStatusFilter"),
   refreshCustomersButton: document.getElementById("refreshCustomersButton"),
+  customerResultMeta: document.getElementById("customerResultMeta"),
+  customerCards: document.getElementById("customerCards"),
   customerSegmentList: document.getElementById("customerSegmentList"),
   customerActivityList: document.getElementById("customerActivityList"),
   customerValueChart: document.getElementById("customerValueChart"),

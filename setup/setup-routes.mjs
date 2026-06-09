@@ -137,10 +137,10 @@ function setupUpdatesFromMcpResult(body = {}) {
   const client = source.client || source.oauth_client || source.data?.client || source.data || source.clients?.[0] || source;
   const shop = source.shop || source.current_shop || source;
   return {
-    CLIENT_ID: client.client_id || client.id || source.client_id || source.id || "",
-    SHOP_ID: shop.shop_id || shop.id || source.shop_id || "",
-    SHOP_NAME: shop.name || source.shop_name || "",
-    SHOP_DOMAIN: shop.domain || source.shop_domain || "",
+    CLIENT_ID: client.client_id || client.clientId || client.id || source.client_id || source.clientId || source.id || "",
+    SHOP_ID: shop.shop_id || shop.shopId || shop.id || source.shop_id || source.shopId || "",
+    SHOP_NAME: shop.name || source.shop_name || source.shopName || "",
+    SHOP_DOMAIN: shop.domain || source.shop_domain || source.shopDomain || "",
   };
 }
 

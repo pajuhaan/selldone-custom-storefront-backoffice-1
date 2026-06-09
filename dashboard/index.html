@@ -445,11 +445,12 @@
             <div id="customerKpis" class="kpi-grid"></div>
 
             <div class="customers-layout">
-              <article class="panel-card span-2">
-                <div class="panel-header product-header">
+              <article class="panel-card customers-main-panel">
+                <div class="panel-header customer-list-header">
                   <div>
                     <h2>Customers</h2>
                     <p>Live customer records from Selldone backoffice API.</p>
+                    <span id="customerResultMeta" class="customer-result-meta">Waiting for customers...</span>
                   </div>
                   <div class="catalog-controls">
                     <div class="table-search">
@@ -476,8 +477,8 @@
                     </button>
                   </div>
                 </div>
-                <div class="table-responsive">
-                  <table class="table data-table">
+                <div class="table-responsive customers-table-wrap">
+                  <table class="table data-table customer-table">
                     <thead>
                       <tr>
                         <th>Customer</th>
@@ -493,6 +494,7 @@
                     <tbody id="customerRows"></tbody>
                   </table>
                 </div>
+                <div id="customerCards" class="customer-card-list"></div>
               </article>
 
               <aside class="product-rail">

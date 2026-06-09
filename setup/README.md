@@ -7,7 +7,7 @@ Routes:
 - `GET /setup/` - minimal setup UI.
 - `GET /setup/api/status` - current defaults, setup state, and MCP/direct API guide.
 - `POST /setup/api/manual` - saves manual values to `.env`.
-- `POST /setup/api/auto` - accepts a pasted MCP result containing `client_id` and `shop_id`; otherwise returns the MCP request contract.
+- `POST /setup/api/auto` - accepts current/default `clientId` and `shopId` values or a pasted MCP result containing `client_id` and `shop_id`; otherwise returns the MCP request contract.
 
 Manual setup writes these values to `.env`:
 

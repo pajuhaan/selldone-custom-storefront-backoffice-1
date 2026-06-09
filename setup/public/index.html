@@ -9,38 +9,53 @@
   </head>
   <body>
     <main class="setup-shell">
-      <section class="intro">
-        <p class="eyebrow">Selldone setup</p>
-        <h1>Connect this package to your shop.</h1>
+      <section class="hero">
+        <p class="eyebrow">Pajulina setup</p>
+        <h1>Connect your Selldone shop.</h1>
         <p class="lead">
-          Enter an existing Selldone OAuth client, or use the automatic MCP path to create one for this dashboard. Setup writes only configuration to <code>.env</code>; OAuth tokens stay in the server token store.
+          Start with the recommended shop connection. The setup writes the required store configuration to <code>.env</code>, then opens Selldone consent so the admin can authenticate.
         </p>
+
+        <div class="primary-action">
+          <button class="connect-button" type="button" data-connect-button>
+            <span>Connect to My Shop</span>
+            <small>Save setup and continue to Selldone</small>
+          </button>
+          <p>
+            Uses the current project defaults when available. OAuth access tokens are not stored in <code>.env</code>.
+          </p>
+        </div>
+
+        <button class="manual-link" type="button" data-mode="manual" data-manual-toggle aria-expanded="false" aria-controls="manual-panel">
+          Manual environment settings
+        </button>
       </section>
 
-      <section class="mode-grid">
-        <article class="setup-card is-active" data-mode-card="manual">
-          <div>
-            <span class="step">1</span>
-            <h2>Manual setup</h2>
-            <p>Use a known client ID and shop ID. This is the standalone package path.</p>
-          </div>
-          <button class="mode-button" type="button" data-mode="manual">Use manual</button>
+      <section class="setup-strip" aria-label="Setup steps">
+        <article>
+          <span>01</span>
+          <h2>Connect</h2>
+          <p>Create or reuse a dashboard OAuth client for this local package.</p>
         </article>
-
-        <article class="setup-card" data-mode-card="auto">
-          <div>
-            <span class="step">2</span>
-            <h2>Automatic setup</h2>
-            <p>Create or repair a shop-bound public OAuth client through Selldone MCP, then authenticate the admin.</p>
-          </div>
-          <button class="mode-button" type="button" data-mode="auto">Use automatic</button>
+        <article>
+          <span>02</span>
+          <h2>Consent</h2>
+          <p>Open Selldone consent on every admin login with the configured prompt.</p>
+        </article>
+        <article>
+          <span>03</span>
+          <h2>Run</h2>
+          <p>Load the dashboard at <code>/dashboard/</code> after setup is complete.</p>
         </article>
       </section>
 
-      <section class="panel" data-panel="manual">
+      <section class="panel d-none" data-panel="manual" id="manual-panel">
         <div class="panel-heading">
-          <h2>Manual values</h2>
-          <p>Current project defaults are prefilled. Update them for a different shop before saving.</p>
+          <div>
+            <p class="eyebrow">Advanced</p>
+            <h2>Manual environment settings</h2>
+          </div>
+          <p>Use this when you already have a Selldone OAuth client ID and shop ID, or when the automatic connector cannot create them.</p>
         </div>
         <form class="setup-form" data-manual-form>
           <label>
@@ -67,23 +82,32 @@
             <span>App base URL</span>
             <input name="appBaseUrl" autocomplete="url" />
           </label>
+          <label>
+            <span>Authentication prompt</span>
+            <select name="authPrompt">
+              <option value="consent">consent</option>
+              <option value="select_account">select_account</option>
+              <option value="">default</option>
+            </select>
+          </label>
           <label class="wide">
             <span>OAuth scopes</span>
             <textarea name="scopes" rows="5"></textarea>
           </label>
           <div class="form-footer">
             <p data-callback-note>Callback URL will be shown here.</p>
-            <button class="primary" type="submit">Save and authenticate</button>
+            <button class="secondary-primary" type="submit">Save .env and Authenticate</button>
           </div>
         </form>
       </section>
 
       <section class="panel d-none" data-panel="auto">
         <div class="panel-heading">
-          <h2>Automatic MCP path</h2>
-          <p>
-            A standalone server cannot call MCP by itself. When a Selldone MCP bridge is available, create the client with the shown request and paste the returned JSON below.
-          </p>
+          <div>
+            <p class="eyebrow">Connector details</p>
+            <h2>Selldone MCP result</h2>
+          </div>
+          <p>If this package cannot create the OAuth client directly, run the MCP request and paste the returned client result here.</p>
         </div>
         <div class="auto-layout">
           <div>
@@ -96,8 +120,8 @@
               <textarea name="mcpResult" rows="8" placeholder='{"client_id":"...","shop_id":14952}'></textarea>
             </label>
             <div class="form-footer">
-              <p>Expected fields: <code>client_id</code> and <code>shop_id</code>. The direct API fallback is documented in the response if MCP is not connected.</p>
-              <button class="primary" type="submit">Save MCP result</button>
+              <p>Expected fields: <code>client_id</code> and <code>shop_id</code>. After saving, Selldone authentication starts.</p>
+              <button class="secondary-primary" type="submit">Save Connector Result</button>
             </div>
           </form>
         </div>
