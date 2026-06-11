@@ -17,6 +17,8 @@ This project is a custom Selldone storefront plus backoffice dashboard. Follow t
 - Do not route dashboard feature reads/writes through local `/api/...` proxy endpoints unless the endpoint is only for app session/setup/auth.
 - Do not use `xapi.selldone.com` for dashboard/backoffice features. `xapi` is storefront-only.
 - The local server may expose `/api/session` so the dashboard can receive OAuth/session context and then call Selldone directly.
+- Do not persist Selldone OAuth access or refresh tokens in browser storage, `.env`, `.auth/`, or any token-store file. Each browser/user session must complete its own OAuth login.
+- The dashboard direct API client may hold the current access token only in memory for the active page runtime.
 - Always use backoffice endpoint contracts from Selldone MCP or official endpoint metadata before adding a new feature endpoint.
 - Preserve Selldone API request/response shapes. Normalize only inside feature modules for UI rendering.
 - If a scope is missing, surface a reconnect-with-consent message rather than inventing fallback data.
@@ -65,7 +67,11 @@ This project is a custom Selldone storefront plus backoffice dashboard. Follow t
 
 - Products use `GET /shops/{shop_id}/products/all-admin`.
 - Customers use `GET /shops/{shop_id}/customers` plus customer detail/update endpoints.
-- Blog posts use Selldone article/blog endpoints from endpoint metadata.
+- Blog posts use Selldone article/blog endpoints from endpoint metadata:
+  - `GET /shops/{shop_id}/blogs` returns the admin list field set and does not include the editable article body, slug, SEO title, description, or tags in the current API response.
+  - `POST /article/shop-blog/edit` creates/updates a blog article and requires a non-empty `body`.
+  - Do not open an existing post editor with an empty body. Fetch a full detail payload from a registered backoffice detail endpoint when available, or block editing with a clear message to avoid overwriting existing content.
+  - Do not use the article SEO audit endpoint as the editor detail source; it does not reliably return editable article content.
 - Notifications use the configured notifications endpoint.
 - Customer messages/contact tickets use `GET /shops/{shop_id}/contacts` with `backoffice:support-tickets`.
 - Payment gateways use:

@@ -2,7 +2,6 @@ import { createHash, randomBytes } from "node:crypto";
 import { AUTHORIZE_ENDPOINT, AUTH_PROMPT, CLIENT_ID, SCOPES, TOKEN_ENDPOINT } from "./config.mjs";
 import { escapeHtml, getOrigin, redirect, sendHtml } from "./http.mjs";
 import { getSession, oauthStates } from "./session.mjs";
-import { clearStoredTokens, cloneTokens, getStoredTokens, saveStoredTokens } from "./token-store.mjs";
 
 function base64Url(buffer) {
   return Buffer.from(buffer).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
@@ -54,7 +53,6 @@ export async function handleCallback(req, res, url) {
       code,
       code_verifier: oauth.verifier,
     });
-    saveStoredTokens(session.tokens);
     delete session.oauth;
     oauthStates.delete(state);
     redirect(res, "/dashboard/#overview");
@@ -83,11 +81,6 @@ async function exchangeToken(params) {
 }
 
 export async function ensureAccessToken(session) {
-  const storedTokens = getStoredTokens();
-  if (!session.tokens && storedTokens?.access_token) {
-    session.tokens = cloneTokens(storedTokens);
-  }
-
   if (!session.tokens?.access_token) {
     return null;
   }
@@ -112,10 +105,8 @@ export async function ensureAccessToken(session) {
       ...refreshedTokens,
       refresh_token: refreshedTokens.refresh_token || previousRefreshToken,
     };
-    saveStoredTokens(session.tokens);
   } catch {
     session.tokens = null;
-    clearStoredTokens();
     const authError = new Error("Selldone session expired. Please sign in again.");
     authError.status = 401;
     throw authError;

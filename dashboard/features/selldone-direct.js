@@ -1,20 +1,11 @@
-const TOKEN_STORAGE_KEY = "pajulina_direct_access_token";
+const LEGACY_TOKEN_STORAGE_KEY = "pajulina_direct_access_token";
 
 export function createSelldoneDirectClient({ requestSession, onAuthExpired }) {
   let session = null;
 
   function setSession(nextSession = {}) {
     session = nextSession;
-    if (nextSession.accessToken) {
-      sessionStorage.setItem(
-        TOKEN_STORAGE_KEY,
-        JSON.stringify({
-          accessToken: nextSession.accessToken,
-          expiresAt: nextSession.tokenExpiresAt || 0,
-          apiBaseUrl: nextSession.apiBaseUrl,
-        }),
-      );
-    }
+    clearLegacyStoredToken();
   }
 
   async function refreshSession() {
@@ -29,12 +20,6 @@ export function createSelldoneDirectClient({ requestSession, onAuthExpired }) {
 
   function getAccessToken() {
     if (session?.accessToken) return session.accessToken;
-    try {
-      const stored = JSON.parse(sessionStorage.getItem(TOKEN_STORAGE_KEY) || "{}");
-      if (stored.accessToken) return stored.accessToken;
-    } catch {
-      return "";
-    }
     return "";
   }
 
@@ -328,6 +313,25 @@ export function createSelldoneDirectClient({ requestSession, onAuthExpired }) {
     return endpointRequest("blogs", query);
   }
 
+  async function blogArticle(articleId) {
+    if (!articleId) throw new Error("Article id is required.");
+
+    const configuredEndpoint = firstConfiguredEndpoint(session, "blogArticle", "blogDetail", "articleDetail");
+    if (configuredEndpoint?.path) {
+      const payload = await request(interpolatePath(configuredEndpoint.path, { article_id: articleId, id: articleId, shop_id: session.shop.id }));
+      const article = articleFromPayload(payload, articleId);
+      if (article) return { article, source: configuredEndpoint.label || "Blog article detail", partial: !hasArticleBody(article), payload };
+    }
+
+    const listPayload = await blogs({ offset: 0, limit: 50, sortBy: "updated_at", sortDesc: "true" });
+    const listArticle = articleListFromPayload(listPayload).find((article) => String(article?.id ?? article?.article_id) === String(articleId));
+    if (listArticle) {
+      return { article: listArticle, source: "Blog posts list", partial: true, payload: listPayload };
+    }
+
+    throw new Error("Blog post was not found in Selldone.");
+  }
+
   async function saveBlogArticle(payload, tags = []) {
     const { tags: ignoredTags, ...articlePayload } = payload || {};
     const data = await request("/article/shop-blog/edit", {
@@ -384,6 +388,7 @@ export function createSelldoneDirectClient({ requestSession, onAuthExpired }) {
     deleteGateway,
     gatewayTransactions,
     blogs,
+    blogArticle,
     saveBlogArticle,
     deleteBlogArticle,
     updateProduct,
@@ -403,12 +408,54 @@ function buildApiUrl(baseUrl, path, params = {}) {
   return url;
 }
 
+function clearLegacyStoredToken() {
+  try {
+    sessionStorage.removeItem(LEGACY_TOKEN_STORAGE_KEY);
+  } catch {
+    // Ignore storage access errors; the direct client only uses in-memory tokens.
+  }
+}
+
 function firstArray(...values) {
   return values.find((value) => Array.isArray(value)) || [];
 }
 
 function articleListFromPayload(payload = {}) {
   return firstArray(payload.articles, payload.blogs, payload.data, payload.items, payload.results);
+}
+
+function articleFromPayload(payload = {}, articleId = null) {
+  if (!payload || typeof payload !== "object") return null;
+  const candidates = [
+    payload.article,
+    payload.data?.article,
+    payload.data,
+    payload.item,
+    payload.result,
+    ...articleListFromPayload(payload),
+  ].filter((item) => item && typeof item === "object" && !Array.isArray(item));
+
+  if (!articleId) return candidates[0] || null;
+  return (
+    candidates.find((article) => String(article.id ?? article.article_id) === String(articleId)) ||
+    candidates.find((article) => String(article.parent_id ?? article.parent?.id) === String(articleId)) ||
+    null
+  );
+}
+
+function hasArticleBody(article = {}) {
+  return ["body", "content", "html", "article_body", "raw_body", "text"].some((key) => typeof article[key] === "string" && article[key].trim());
+}
+
+function firstConfiguredEndpoint(currentSession, ...keys) {
+  return keys.map((key) => currentSession?.endpoints?.[key]).find((endpoint) => endpoint?.path) || null;
+}
+
+function interpolatePath(path, values = {}) {
+  return String(path).replace(/\{([^}]+)\}|:([A-Za-z0-9_]+)/g, (match, bracedKey, colonKey) => {
+    const key = bracedKey || colonKey;
+    return values[key] === undefined || values[key] === null ? match : encodeURIComponent(values[key]);
+  });
 }
 
 function customerListFromPayload(payload = {}) {

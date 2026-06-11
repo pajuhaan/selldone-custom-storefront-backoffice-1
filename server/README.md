@@ -1,8 +1,8 @@
 # Server Modules
 
-- `config.mjs`: Selldone constants, OAuth scopes, shop id, endpoint definitions, and token-store paths.
+- `config.mjs`: Selldone constants, OAuth scopes, shop id, endpoint definitions, and legacy token-store cleanup paths.
 - `http.mjs`: Small HTTP helpers for JSON, redirects, cookies, request bodies, and HTML escaping.
-- `token-store.mjs`: Server-side persisted OAuth token storage under `.auth/`.
+- `token-store.mjs`: Legacy token cleanup helpers. OAuth tokens must not be persisted under `.auth/`.
 - `session.mjs`: Browser session cookie handling and in-memory session state.
 - `auth.mjs`: Selldone OAuth PKCE login, callback handling, token refresh, and consent prompt.
 - `selldone-api.mjs`: Backoffice API calls, endpoint summaries, dashboard payloads, product edit/delete helpers, and profile avatar proxy.

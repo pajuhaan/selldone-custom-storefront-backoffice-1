@@ -16,7 +16,7 @@ This open-source starter is for teams that want full control over their customer
 - Avoid commerce maintenance: Selldone remains the cloud commerce backend, so you do not have to rebuild or maintain complex commerce functionality.
 - Use live Selldone data: the local server connects the storefront and backoffice dashboard to Selldone APIs.
 - Customize with AI agents: use AI coding agents to adapt the storefront and dashboard to each brand, market, catalog, and operational workflow.
-- Keep credentials safer: dashboard OAuth tokens are stored only in the local server session, not in browser storage.
+- Keep credentials safer: dashboard OAuth tokens are never persisted; each browser session must authenticate its own Selldone user, and the direct browser client keeps the access token only in memory.
 
 ## What Is Included
 

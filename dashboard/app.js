@@ -319,6 +319,7 @@ const state = {
   activeCustomerId: null,
   activeArticleId: null,
   blogLoading: false,
+  articleDetailLoadingId: null,
   customerDetailLoadingId: null,
   dateRangeDays: 30,
   dashboard: {
@@ -335,6 +336,7 @@ const state = {
     gatewayTransactionTotal: 0,
     gatewayCurrency: "USD",
     articles: [],
+    articleDetails: {},
     blogTimeline: [],
     blogTags: [],
     notifications: [],
@@ -785,7 +787,9 @@ async function loadDashboard() {
     state.dashboard.gatewayTransactions = normalizeGatewayTransactions(dashboard.gatewayTransactions || []);
     state.dashboard.gatewayTransactionTotal = Number(dashboard.gatewayTransactionTotal || state.dashboard.gatewayTransactions.length || 0);
     state.dashboard.gatewayCurrency = dashboard.gatewayCurrency || state.session?.shop?.currency || state.dashboard.products[0]?.currency || "USD";
-    state.dashboard.articles = normalizeArticles(dashboard.articles || []);
+    state.dashboard.articles = normalizeArticles(dashboard.articles || []).map((article) =>
+      mergeArticleForEdit(article, state.dashboard.articleDetails[String(article.id)]),
+    );
     state.dashboard.blogTimeline = normalizeArticles(dashboard.blogTimeline || []);
     state.dashboard.blogTags = normalizeArticleTags(dashboard.blogTags || []);
     state.dashboard.notifications = normalizeNotifications(dashboard.notifications || []);
@@ -3320,6 +3324,88 @@ function findArticle(articleId) {
   return state.dashboard.articles.find((article) => String(article.id) === String(articleId)) || null;
 }
 
+function updateArticleInState(article) {
+  if (!article?.id) return article;
+  const key = String(article.id);
+  state.dashboard.articleDetails[key] = article;
+  const index = state.dashboard.articles.findIndex((item) => String(item.id) === key);
+  if (index >= 0) {
+    state.dashboard.articles[index] = mergeArticleForEdit(state.dashboard.articles[index], article);
+    return state.dashboard.articles[index];
+  }
+  state.dashboard.articles.unshift(article);
+  state.dashboard.articleTotal = Math.max(Number(state.dashboard.articleTotal || 0), state.dashboard.articles.length);
+  return article;
+}
+
+function mergeArticleForEdit(baseArticle, detailArticle) {
+  if (!baseArticle) return detailArticle || null;
+  if (!detailArticle) return baseArticle;
+  const tags = detailArticle.tags?.length ? detailArticle.tags : baseArticle.tags || [];
+  const body = detailArticle.body || baseArticle.body || "";
+  return {
+    ...baseArticle,
+    ...detailArticle,
+    id: baseArticle.id || detailArticle.id,
+    title: detailArticle.title || baseArticle.title,
+    slug: detailArticle.slug || baseArticle.slug,
+    pageTitle: detailArticle.pageTitle || baseArticle.pageTitle,
+    description: detailArticle.description || baseArticle.description,
+    body,
+    hasFullBody: Boolean(body),
+    image: detailArticle.image || baseArticle.image,
+    imageUrl: detailArticle.imageUrl || baseArticle.imageUrl,
+    lang: detailArticle.lang || baseArticle.lang,
+    tags,
+    scheduledAt: detailArticle.scheduledAt || baseArticle.scheduledAt,
+    createdAt: detailArticle.createdAt || baseArticle.createdAt,
+    updatedAt: detailArticle.updatedAt || baseArticle.updatedAt,
+    author: detailArticle.author || baseArticle.author,
+    raw: {
+      ...(baseArticle.raw || {}),
+      ...(detailArticle.raw || {}),
+      parent: detailArticle.raw?.parent || baseArticle.raw?.parent,
+    },
+  };
+}
+
+function normalizeArticleForEdit(rawArticle, fallbackArticle = null) {
+  if (!rawArticle) return fallbackArticle;
+  const mergedRaw = {
+    ...(fallbackArticle?.raw || {}),
+    ...rawArticle,
+    parent: rawArticle.parent || fallbackArticle?.raw?.parent,
+  };
+  return mergeArticleForEdit(fallbackArticle, normalizeArticles([mergedRaw])[0]);
+}
+
+async function loadArticleForEdit(articleId) {
+  const currentArticle = findArticle(articleId);
+  const cachedArticle = state.dashboard.articleDetails[String(articleId)];
+  if (cachedArticle?.hasFullBody) return mergeArticleForEdit(currentArticle, cachedArticle);
+
+  const result = await selldoneClient.blogArticle(articleId);
+  const article = updateArticleInState(normalizeArticleForEdit(result?.article, currentArticle));
+  if (article?.hasFullBody) return article;
+
+  const error = new Error(
+    "Selldone returned only the blog list record. The current body is not available from the registered backoffice article endpoints.",
+  );
+  error.partialArticle = article;
+  error.source = result?.source || "Blog posts list";
+  throw error;
+}
+
+function setArticleEditLoading(articleId, loading) {
+  state.articleDetailLoadingId = loading ? articleId : null;
+  document.querySelectorAll("[data-article-edit]").forEach((button) => {
+    if (String(button.dataset.articleEdit) !== String(articleId)) return;
+    button.disabled = loading;
+    const label = button.querySelector("span");
+    if (label) label.textContent = loading ? "Loading..." : "Edit post";
+  });
+}
+
 function toggleArticleMenu(button) {
   const wrapper = button.closest("[data-article-action-menu]");
   const willOpen = !wrapper.classList.contains("is-open");
@@ -3335,13 +3421,35 @@ function closeArticleMenus() {
   });
 }
 
-function openArticleEditor(articleId = null) {
-  const article = articleId ? findArticle(articleId) : null;
-  if (articleId && !article) {
+async function openArticleEditor(articleId = null) {
+  if (!articleId) {
+    populateArticleEditor(null);
+    showArticleEditor(null);
+    return;
+  }
+
+  const existingArticle = findArticle(articleId);
+  if (!existingArticle) {
     notify("Blog post was not found in the current table.");
     return;
   }
 
+  if (state.articleDetailLoadingId) return;
+
+  closeArticleMenus();
+  setArticleEditLoading(articleId, true);
+  try {
+    const article = await loadArticleForEdit(articleId);
+    populateArticleEditor(article);
+    showArticleEditor(article);
+  } catch (error) {
+    notify(formatArticleActionError(error.message));
+  } finally {
+    setArticleEditLoading(articleId, false);
+  }
+}
+
+function populateArticleEditor(article = null) {
   state.editingArticleId = article?.id || null;
   els.articleEditId.value = article?.id || "";
   els.articleEditTitle.value = article?.title || "";
@@ -3357,14 +3465,17 @@ function openArticleEditor(articleId = null) {
   els.articleEditPrivate.checked = Boolean(article?.private);
 
   const bodyMissingFromApi = Boolean(article && !article.hasFullBody);
-  els.articleEditBody.required = !article || article.hasFullBody;
+  els.articleEditBody.required = true;
   if (els.articleEditBodyHelp) {
     els.articleEditBodyHelp.textContent = bodyMissingFromApi
-      ? "Selldone's blog list API did not return the current article body. Paste the body before saving to avoid replacing the existing content."
+      ? "Selldone did not return the current article body from the registered backoffice endpoints. The editor stays blocked to prevent replacing existing content with an empty body."
       : "";
     els.articleEditBodyHelp.classList.toggle("warning", bodyMissingFromApi);
   }
+  els.articleEditSubmit.disabled = Boolean(bodyMissingFromApi);
+}
 
+function showArticleEditor(article = null) {
   const title = document.getElementById("articleEditorTitle");
   if (title) title.textContent = article ? "Edit Blog Post" : "New Blog Post";
   els.articleEditor.classList.add("is-open");
@@ -3378,6 +3489,7 @@ function closeArticleEditor() {
   els.articleEditor.setAttribute("aria-hidden", "true");
   els.articleEditForm.reset();
   els.articleEditBody.required = true;
+  els.articleEditSubmit.disabled = false;
   if (els.articleEditBodyHelp) {
     els.articleEditBodyHelp.textContent = "";
     els.articleEditBodyHelp.classList.remove("warning");
