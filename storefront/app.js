@@ -8,6 +8,39 @@ const DATA_SOURCE = {
 };
 const XAPI_PRODUCT_LIMIT = 200;
 
+const heroSlides = [
+  {
+    image: "assets/cosmetic-hero-ritual.png",
+    position: "50% 50%",
+    accent: "#1f8f3a",
+    eyebrow: "Pajulina cosmetic shop",
+    title: "Glow rituals, edited beautifully",
+    body: "Fresh skin care, soft color, and everyday essentials curated for a clean routine.",
+    cta: "Shop skin care",
+    href: "#shop?category=skincare",
+  },
+  {
+    image: "assets/cosmetic-hero-discounts.png",
+    position: "58% 50%",
+    accent: "#e4b900",
+    eyebrow: "Member beauty deals",
+    title: "Save on the icons in your routine",
+    body: "Discounted beauty finds with premium skin, makeup, and gifting picks in one edit.",
+    cta: "Shop discounts",
+    href: "#shop?discount=1",
+  },
+  {
+    image: "assets/cosmetic-hero-routine.png",
+    position: "54% 50%",
+    accent: "#2aa36b",
+    eyebrow: "Routine order",
+    title: "Cream pots first, eye essentials last",
+    body: "Start with skin-focused jars, move into tubes, then finish with refined eye products.",
+    cta: "Explore the edit",
+    href: "#shop",
+  },
+];
+
 const shadePalette = [
   "#f8d2b1",
   "#f0bf94",
@@ -50,6 +83,7 @@ const shadePalette = [
 const state = {
   cart: readCart(),
   activeCategory: "all",
+  activeDiscountOnly: false,
   activeSort: "featured",
   search: "",
   activeMedia: null,
@@ -64,6 +98,7 @@ const state = {
   loadError: null,
   xapiEndpoint: null,
   activeProductGallery: [],
+  activeHeroSlide: 0,
 };
 
 const els = {
@@ -222,6 +257,14 @@ function getCategoryCards() {
   return state.categoryCards;
 }
 
+function sortCategoryCards(cards = []) {
+  return [...cards].sort(
+    (a, b) =>
+      productMerchPriority({ key: a.key, label: a.label, title: a.label, category: a.key }) -
+      productMerchPriority({ key: b.key, label: b.label, title: b.label, category: b.key }),
+  );
+}
+
 function isCategoryAvailable(value) {
   const normalized = asSafeCategory(value);
   if (!normalized || normalized === "all") return true;
@@ -378,6 +421,7 @@ function getProductById(productId) {
 function syncRouteSearch(query) {
   state.search = query.get("search") || "";
   state.activeCategory = query.get("category") || "all";
+  state.activeDiscountOnly = ["1", "true", "yes"].includes(String(query.get("discount") || "").toLowerCase());
   if (els.searchInput) els.searchInput.value = state.search;
   closeMobileMenu();
 }
@@ -407,8 +451,8 @@ function applyXapiCatalog(payload, sourceLabel = "xapi") {
 
   state.products = mappedProducts;
   state.folders = responseFolders(payload);
-  const foldersCategoryCards = buildCategoryCardsFromFolders(state.folders).map((item) => [item.key, item.label, item.image]);
-  const productCategoryCards = buildCategoryCardsFromProducts(mappedProducts).map((item) => [item.key, item.label, item.image]);
+  const foldersCategoryCards = sortCategoryCards(buildCategoryCardsFromFolders(state.folders)).map((item) => [item.key, item.label, item.image]);
+  const productCategoryCards = sortCategoryCards(buildCategoryCardsFromProducts(mappedProducts)).map((item) => [item.key, item.label, item.image]);
   state.categoryCards = foldersCategoryCards.length > 0 ? foldersCategoryCards : productCategoryCards;
   sanitizeActiveCategory();
   state.dataSource = DATA_SOURCE.xapi;
@@ -708,27 +752,133 @@ function hasProductDiscount(item) {
   return toNumber(item?.discount, 0) > 0 || (toNumber(item?.original, 0) > 0 && toNumber(item?.original, 0) > toNumber(item?.price, 0));
 }
 
+function productMerchText(item) {
+  const folder = item?.folder || {};
+  const categories = Array.isArray(item?.categories)
+    ? item.categories.map((category) => [category?.name, category?.title, category?.slug, category?.category_name].filter(Boolean).join(" ")).join(" ")
+    : "";
+  return [
+    item?.brand,
+    item?.key,
+    item?.label,
+    item?.title,
+    item?.category,
+    item?.subcategory,
+    item?.description,
+    item?.sku,
+    folder?.name,
+    folder?.title,
+    folder?.slug,
+    folder?.category_name,
+    categories,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function productMerchPriority(item) {
+  const text = productMerchText(item);
+  const isEye = /\b(eye|eyes|eyeliner|mascara|brow|eyebrow|eyelash|lashes|shadow|eyeshadow|undereye|under-eye|kohl|liner)\b|چشم|ابرو|مژه/i.test(text);
+  const isTube = /\b(tube|tubed|squeeze|cream tube|gel tube|lotion tube)\b|تیوب/i.test(text);
+  const isSkin =
+    /\b(skin|skincare|skin-care|face|facial|cream|creme|moisturizer|moisturiser|serum|sunscreen|spf|cleanser|toner|mask|balm|lotion|hydrating|hydrate|anti-aging|antiage|dermal|derma|jar|pot|tub)\b|پوست|کرم|آبرسان|مرطوب/i.test(
+      text,
+    );
+
+  if (isSkin && !isTube && !isEye) return 0;
+  if (isSkin && isTube && !isEye) return 1;
+  if (isEye) return 3;
+  return 2;
+}
+
+function sortByMerchPriority(products) {
+  return [...products].sort(
+    (a, b) =>
+      productMerchPriority(a) - productMerchPriority(b) ||
+      Number(hasProductDiscount(b)) - Number(hasProductDiscount(a)) ||
+      toNumber(b.rating, 0) - toNumber(a.rating, 0) ||
+      productTimeValue(b) - productTimeValue(a),
+  );
+}
+
 function homeDeals(products, limit, offset = 0) {
-  const discounted = products.filter(hasProductDiscount);
-  const source = discounted.length >= offset + 1 ? discounted : products;
+  const discounted = sortByMerchPriority(products.filter(hasProductDiscount));
+  const source = discounted.length >= offset + 1 ? discounted : sortByMerchPriority(products);
   return source.slice(offset, offset + limit);
 }
 
 function homeRecommended(products, limit) {
   return [...products]
-    .sort((a, b) => toNumber(b.rating, 0) - toNumber(a.rating, 0) || toNumber(b.reviews, 0) - toNumber(a.reviews, 0))
+    .sort(
+      (a, b) =>
+        productMerchPriority(a) - productMerchPriority(b) ||
+        toNumber(b.rating, 0) - toNumber(a.rating, 0) ||
+        toNumber(b.reviews, 0) - toNumber(a.reviews, 0),
+    )
     .slice(0, limit);
 }
 
 function homeNewProducts(products, limit) {
   return [...products]
-    .sort((a, b) => productTimeValue(b) - productTimeValue(a))
+    .sort((a, b) => productMerchPriority(a) - productMerchPriority(b) || productTimeValue(b) - productTimeValue(a))
     .slice(0, limit);
 }
 
 function productTimeValue(item) {
   const value = Date.parse(item?.createdAt || item?.updatedAt || "");
   return Number.isFinite(value) ? value : toNumber(item?.id, 0);
+}
+
+function renderHeroCarousel() {
+  const total = heroSlides.length;
+  const activeIndex = ((state.activeHeroSlide % total) + total) % total;
+  const trackOffset = activeIndex * 100;
+
+  return `
+    <section class="hero-carousel" aria-label="Cosmetic shop highlights" data-hero-carousel>
+      <div class="hero-carousel-track" data-hero-track style="transform: translateX(-${trackOffset}%);">
+        ${heroSlides
+          .map(
+            (slide, index) => `
+              <article
+                class="hero-slide ${index === activeIndex ? "is-active" : ""}"
+                style="--hero-image:url('${slide.image}');--hero-pos:${slide.position};--hero-accent:${slide.accent};"
+                aria-hidden="${index === activeIndex ? "false" : "true"}"
+              >
+                <div class="hero-copy">
+                  <span class="eyebrow">${escapeHtml(slide.eyebrow)}</span>
+                  <h1>${escapeHtml(slide.title)}</h1>
+                  <p>${escapeHtml(slide.body)}</p>
+                  <a class="pill-button" href="${escapeHtml(slide.href)}">${escapeHtml(slide.cta)}</a>
+                </div>
+              </article>
+            `,
+          )
+          .join("")}
+      </div>
+      <div class="hero-controls" aria-label="Hero carousel controls">
+        <button class="hero-arrow" type="button" data-hero-step="-1" aria-label="Previous hero slide">&lsaquo;</button>
+        <div class="hero-dots" role="tablist" aria-label="Hero slides">
+          ${heroSlides
+            .map(
+              (slide, index) => `
+                <button
+                  class="hero-dot ${index === activeIndex ? "is-active" : ""}"
+                  type="button"
+                  data-hero-slide="${index}"
+                  role="tab"
+                  aria-label="${escapeHtml(slide.eyebrow)}"
+                  aria-selected="${index === activeIndex ? "true" : "false"}"
+                ></button>
+              `,
+            )
+            .join("")}
+        </div>
+        <button class="hero-arrow" type="button" data-hero-step="1" aria-label="Next hero slide">&rsaquo;</button>
+      </div>
+    </section>
+  `;
 }
 
 function renderHomePage() {
@@ -746,13 +896,14 @@ function renderHomePage() {
   els.app.innerHTML = `
     <div class="page-shell">
       ${renderDataStatus()}
+      ${renderHeroCarousel()}
       <section class="promo-grid" aria-label="Featured offers">
         <article class="promo-card hot">
           <div class="promo-body">
             <span class="eyebrow">Rewards are glowing</span>
             <h1>Members save up to 20%</h1>
             <p>Fresh color, daily skin care, and easy gifts for every routine.</p>
-            <a class="pill-button light" href="#shop">Shop now</a>
+            <a class="pill-button light" href="#shop?discount=1">Shop discounts</a>
             <div class="promo-discs" aria-hidden="true">
               <span>diamond<br />20%</span>
               <span>platinum<br />15%</span>
@@ -916,6 +1067,7 @@ function renderShopPage() {
           ${(() => {
             const chips = [["all", "All"], ...getCategoryCards().map(([key, label]) => [key, label])];
             return `<div class="filter-bar" role="group" aria-label="Filter by category">
+              ${discountFilterChip()}
               ${chips.map(([key, label]) => filterChip(key, label)).join("")}
             </div>`;
           })()}
@@ -1174,8 +1326,15 @@ function filterChip(category, label) {
   return `<button class="filter-chip ${state.activeCategory === category ? "is-active" : ""}" type="button" data-filter="${category}">${label}</button>`;
 }
 
+function discountFilterChip() {
+  return `<button class="filter-chip ${state.activeDiscountOnly ? "is-active" : ""}" type="button" data-discount-filter="toggle">Discounts</button>`;
+}
+
 function getFilteredProducts() {
   let list = [...getProductsForUi()];
+  if (state.activeDiscountOnly) {
+    list = list.filter(hasProductDiscount);
+  }
   if (state.activeCategory && state.activeCategory !== "all") {
     list = list.filter((item) => {
       const subcategory = String(item.subcategory || "").toLowerCase();
@@ -1191,6 +1350,7 @@ function getFilteredProducts() {
       `${item.brand || ""} ${item.title || ""} ${item.category || ""} ${item.subcategory || ""}`.toLowerCase().includes(query),
     );
   }
+  if (state.activeSort === "featured") list = sortByMerchPriority(list);
   if (state.activeSort === "price-low") list.sort((a, b) => a.price - b.price);
   if (state.activeSort === "price-high") list.sort((a, b) => b.price - a.price);
   if (state.activeSort === "rating") list.sort((a, b) => b.rating - a.rating);
@@ -1200,8 +1360,9 @@ function getFilteredProducts() {
 
 function shopHeading() {
   if (state.search) return `Search results for "${state.search}"`;
+  if (state.activeDiscountOnly && (!state.activeCategory || state.activeCategory === "all")) return "Discounted Beauty";
   if (!state.activeCategory || state.activeCategory === "all") return "Pajulina Beauty";
-  return `${titleCase(state.activeCategory)} at Pajulina`;
+  return `${state.activeDiscountOnly ? "Discounted " : ""}${titleCase(state.activeCategory)} at Pajulina`;
 }
 
 function eventTile(title, body, pos) {
@@ -1420,11 +1581,45 @@ function showToast(message) {
   showToast.timer = window.setTimeout(() => toast.classList.remove("is-visible"), 1500);
 }
 
+function setHeroSlide(index) {
+  const total = heroSlides.length;
+  if (!total) return;
+  state.activeHeroSlide = ((index % total) + total) % total;
+
+  const carousel = document.querySelector("[data-hero-carousel]");
+  const track = carousel?.querySelector("[data-hero-track]");
+  if (!carousel || !track) return;
+
+  track.style.transform = `translateX(-${state.activeHeroSlide * 100}%)`;
+  carousel.querySelectorAll(".hero-slide").forEach((slide, slideIndex) => {
+    const isActive = slideIndex === state.activeHeroSlide;
+    slide.classList.toggle("is-active", isActive);
+    slide.setAttribute("aria-hidden", isActive ? "false" : "true");
+  });
+  carousel.querySelectorAll("[data-hero-slide]").forEach((dot, dotIndex) => {
+    const isActive = dotIndex === state.activeHeroSlide;
+    dot.classList.toggle("is-active", isActive);
+    dot.setAttribute("aria-selected", isActive ? "true" : "false");
+  });
+}
+
 function closeMobileMenu() {
   els.primaryLinks?.classList.remove("is-open");
 }
 
 document.addEventListener("click", (event) => {
+  const heroStep = event.target.closest("[data-hero-step]");
+  if (heroStep) {
+    setHeroSlide(state.activeHeroSlide + Number(heroStep.dataset.heroStep));
+    return;
+  }
+
+  const heroSlide = event.target.closest("[data-hero-slide]");
+  if (heroSlide) {
+    setHeroSlide(Number(heroSlide.dataset.heroSlide));
+    return;
+  }
+
   const addButton = event.target.closest("[data-add-to-cart]");
   if (addButton) {
     addToCart(addButton.dataset.addToCart);
@@ -1436,6 +1631,18 @@ document.addEventListener("click", (event) => {
     state.activeCategory = filter.dataset.filter;
     setHash("shop", {
       category: state.activeCategory,
+      ...(state.activeDiscountOnly ? { discount: "1" } : {}),
+      ...(state.search ? { search: state.search } : {}),
+    });
+    return;
+  }
+
+  const discountFilter = event.target.closest("[data-discount-filter]");
+  if (discountFilter) {
+    state.activeDiscountOnly = !state.activeDiscountOnly;
+    setHash("shop", {
+      ...(state.activeCategory && state.activeCategory !== "all" ? { category: state.activeCategory } : {}),
+      ...(state.activeDiscountOnly ? { discount: "1" } : {}),
       ...(state.search ? { search: state.search } : {}),
     });
     return;
@@ -1520,6 +1727,7 @@ document.querySelector("[data-search-form]")?.addEventListener("submit", (event)
   state.search = new FormData(event.currentTarget).get("q")?.toString().trim() || "";
   setHash("shop", {
     ...(state.activeCategory && state.activeCategory !== "all" ? { category: state.activeCategory } : {}),
+    ...(state.activeDiscountOnly ? { discount: "1" } : {}),
     ...(state.search ? { search: state.search } : {}),
   });
 });
