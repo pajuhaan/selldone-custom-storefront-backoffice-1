@@ -22,6 +22,7 @@ This project is a custom Selldone storefront plus backoffice dashboard. Follow t
 - Always use backoffice endpoint contracts from Selldone MCP or official endpoint metadata before adding a new feature endpoint.
 - Preserve Selldone API request/response shapes. Normalize only inside feature modules for UI rendering.
 - If a scope is missing, surface a reconnect-with-consent message rather than inventing fallback data.
+- Storefront OAuth must stay separate from dashboard OAuth. Storefront scopes are limited to `profile`, `phone`, `address`, `user:profile:write`, `buy`, `order-history`, and `my-gift-cards`; do not add dashboard/backoffice scopes to storefront login.
 
 ## Selldone Image URL Standard
 

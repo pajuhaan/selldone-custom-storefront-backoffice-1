@@ -1,4 +1,4 @@
-import { API_BASE, ARTICLE_UPDATE_FIELDS, CUSTOMER_UPDATE_FIELDS, ENDPOINTS, PRODUCT_UPDATE_FIELDS, PROFILE_ENDPOINT, SHOP, SHOP_ID } from "./config.mjs";
+import { API_BASE, ARTICLE_UPDATE_FIELDS, CUSTOMER_UPDATE_FIELDS, ENDPOINTS, PRODUCT_UPDATE_FIELDS, PROFILE_ENDPOINT, SELLDONE_BASE, SHOP, SHOP_ID } from "./config.mjs";
 import { ensureAccessToken } from "./auth.mjs";
 const guardedBackofficeLogs = new Map();
 
@@ -461,6 +461,7 @@ function normalizeUserProfile(payload = {}) {
   const name = fullName || "Selldone user";
   const email = String(profile.email || "").trim();
   const id = Number(profile.id || profile.profile_id || profile.user_id || 0);
+  const avatarUserId = Number(profile.user_id || profile.id || profile.profile_id || 0);
   const city =
     String(profile.city || profile.city_name || profile.address?.city || profile.billing?.city || profile.state || "").trim() || "";
   const address = String(
@@ -482,7 +483,10 @@ function normalizeUserProfile(payload = {}) {
     username: String(profile.username || "").trim(),
     address,
     city,
-    avatarUrl: `/api/profile/avatar?id=${encodeURIComponent(String(profile.avatarId || profile.id || profile.user_id || 0))}&size=small`,
+    avatarUrl:
+      Number.isFinite(avatarUserId) && avatarUserId > 0
+        ? userAvatarUrl(avatarUserId, "small")
+        : "",
   };
 }
 
@@ -502,7 +506,7 @@ export function fallbackUserProfile() {
 }
 
 export async function sendProfileAvatar(req, res, session, url, fallbackSession = null) {
-  const userId = Number(url.searchParams.get("id"));
+  const userId = Number(url.searchParams.get("user_id") || url.searchParams.get("id"));
   if (!Number.isFinite(userId) || userId <= 0) {
     res.writeHead(400, {
       "Content-Type": "text/plain; charset=utf-8",
@@ -523,6 +527,7 @@ export async function sendProfileAvatar(req, res, session, url, fallbackSession 
   const avatarId = Math.trunc(userId);
   const size = normalizeAvatarSize(url.searchParams.get("size") || "small");
   const candidates = [
+    userAvatarUrl(avatarId, size),
     `${API_BASE}/users/${avatarId}/profile/avatar/${size}`,
     `${API_BASE}/profile/image/${avatarId}/avatar${size === "big" ? "192" : "92"}.jpg`,
     `${API_BASE}/profile/image/${avatarId}/avatar92.jpg`,
@@ -578,6 +583,13 @@ function normalizeAvatarSize(value) {
   const size = String(value || "").trim().toLowerCase();
   if (size === "big") return "big";
   return "small";
+}
+
+function userAvatarUrl(userId, size = "small") {
+  const avatarId = Math.trunc(Number(userId || 0));
+  if (!Number.isFinite(avatarId) || avatarId <= 0) return "";
+  const normalizedSize = normalizeAvatarSize(size);
+  return `${SELLDONE_BASE}/users/${avatarId}/profile/avatar/${normalizedSize}`;
 }
 
 export function publicEndpointConfig() {

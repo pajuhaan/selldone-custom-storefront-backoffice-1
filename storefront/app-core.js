@@ -202,6 +202,7 @@ function pickNumeric(source, candidates = [], fallback = 0) {
 function firstNonNull(...values) {
   for (const value of values) {
     if (value === undefined || value === null) continue;
+    if (typeof value !== "string") return value;
     const text = String(value).trim();
     if (text !== "") return text;
   }
@@ -425,7 +426,17 @@ function mapProduct(raw) {
     toSlug(firstNonNull(categorySource?.name, categorySource?.title, raw.subcategory, raw.section)),
   );
   const images = extractImages(raw);
-  const mappedVariants = normalizeProductVariants(firstArray(raw.variants, raw.product_variants, raw.productVariants), raw);
+  const catalogVariants = Array.isArray(raw.product_variants) && raw.product_variants.length > 0 ? raw.product_variants : [];
+  const mappedVariants = normalizeProductVariants(
+    catalogVariants.length
+      ? catalogVariants
+      : Array.isArray(raw.variants) && raw.variants.length > 0
+        ? raw.variants
+        : Array.isArray(raw.productVariants) && raw.productVariants.length > 0
+          ? raw.productVariants
+          : [],
+    raw,
+  );
   const price = toNumber(firstNonNull(raw.price, raw.final_price, raw.sale_price, raw.priced_value, raw.list_price), 0);
   const originalCandidate = firstNonNull(raw.original, raw.regular_price, raw.compare_at_price, raw.base_price, raw.list_price);
   const discount = toNumber(raw.discount, 0);
@@ -470,6 +481,7 @@ function mapProduct(raw) {
     rating: Math.max(0, Math.min(5, rating)),
     reviews,
     sku: raw.sku || `PJ-${raw.id || ""}`,
+    type: firstNonNull(raw.type, raw.product_type, raw.kind, ""),
     files: Array.isArray(raw.files) ? raw.files : [],
     file: raw.file,
     createdAt: raw.created_at || raw.createdAt || null,
@@ -481,7 +493,7 @@ function mapProduct(raw) {
     ),
     rate: raw.rate,
     categories: Array.isArray(raw.categories) ? raw.categories : [],
-    productVariants: Array.isArray(raw.productVariants) ? raw.productVariants : [],
+    productVariants: catalogVariants.length ? catalogVariants : Array.isArray(raw.productVariants) ? raw.productVariants : [],
     variants: mappedVariants,
     folder: categorySource,
   };
@@ -490,10 +502,30 @@ function mapProduct(raw) {
 function normalizeProductVariants(rawVariants = [], rawProduct = null) {
   const productId = String(firstNonNull(rawProduct?.id, rawProduct?.product_id, rawProduct?.code, "product"));
   const list = Array.isArray(rawVariants) ? rawVariants : [];
+  const fallbackVariants = Array.isArray(rawProduct?.product_variants) ? rawProduct.product_variants : [];
+  const fallbackByIndex = fallbackVariants.length > 0 && fallbackVariants.length === list.length;
+
   return list
     .map((rawVariant, index) => {
       if (!rawVariant || typeof rawVariant !== "object") return null;
-      const variant = { ...rawVariant };
+      const fallbackVariant = fallbackByIndex ? fallbackVariants[index] : null;
+      const variant = {
+        ...rawVariant,
+        ...(fallbackVariant && typeof fallbackVariant === "object"
+          ? (() => {
+              const variantId = parseStorefrontVariantId(firstNonNull(rawVariant.variant_id, rawVariant.product_variant_id, rawVariant.variantId, rawVariant.id));
+              const fallbackVariantId = parseStorefrontVariantId(
+                firstNonNull(fallbackVariant.variant_id, fallbackVariant.product_variant_id, fallbackVariant.id, fallbackVariant.variantId),
+              );
+              if (variantId || !fallbackVariantId) return {};
+              return {
+                id: fallbackVariantId ? String(fallbackVariantId) : rawVariant.id,
+                variant_id: firstNonNull(rawVariant.variant_id, fallbackVariant.variant_id, fallbackVariant.id),
+                product_variant_id: firstNonNull(rawVariant.product_variant_id, fallbackVariant.product_variant_id, fallbackVariant.id),
+              };
+            })()
+          : {}),
+      };
       const variantId = firstNonNull(variant.id, variant.variant_id, variant.sku, variant.code, variant.name, variant.title);
       const key = String(firstNonNull(variantId, `${productId}-${index}`)).trim();
       const color = firstNonNull(variant.color, variant.colour, variant.hex, variant.color_code, variant.colour_code, variant.swatch_color);
@@ -780,15 +812,18 @@ function syncRouteSearch(query) {
 }
 
 function responseProducts(payload) {
-  return firstArray(
+  const products = firstArray(
     payload?.products,
     payload?.data?.products,
     payload?.data?.data?.products,
+    payload?.data?.response?.products,
     payload?.result?.products,
     payload?.result?.data?.products,
+    payload?.result?.response?.products,
     payload?.payload?.products,
     payload?.payload?.data?.products,
     payload?.payload?.result?.products,
+    payload?.payload?.response?.products,
     payload?.data?.payload?.products,
     payload?.items,
     payload?.data?.items,
@@ -798,6 +833,23 @@ function responseProducts(payload) {
     payload?.result?.data?.items,
     payload?.data,
   );
+  if (products.length) return products;
+
+  const singleProduct = firstNonNull(
+    payload?.product,
+    payload?.data?.product,
+    payload?.result?.product,
+    payload?.payload?.product,
+    payload?.payload?.data?.product,
+    payload?.result?.data?.product,
+    payload?.response?.product,
+    payload?.response?.data?.product,
+    payload?.data?.response?.product,
+    payload?.result?.response?.product,
+    payload?.payload?.response?.product,
+    payload?.payload?.response?.product,
+  );
+  return singleProduct ? [singleProduct] : [];
 }
 
 function responseFolders(payload) {
@@ -1047,7 +1099,19 @@ async function fetchXapiProductDetail(productId) {
     }
     const response = await proxyResponse.json().catch(() => null);
     if (!response) return null;
-    const payload = response?.product || response?.data?.product || response?.data || response;
+    const payload = firstNonNull(
+      response?.product,
+      response?.data?.product,
+      response?.data?.response?.product,
+      response?.response?.product,
+      response?.result?.product,
+      response?.result?.response?.product,
+      response?.payload?.product,
+      response?.payload?.response?.product,
+      response?.payload?.data?.product,
+      response?.data,
+      response,
+    );
     const mapped = mapProduct(payload);
     if (!mapped) return null;
 
@@ -1203,15 +1267,9 @@ async function fetchSessionStatus(force = false) {
       clearStorefrontSessionTokens();
       state.accountMenuOpen = false;
     } else {
-      const expiresAt = Number(payload?.tokenExpiresAt || 0);
-      const hasValidAuthToken = Number.isFinite(expiresAt) && expiresAt > Date.now();
-
-      state.sessionAuthenticated = Boolean(payload.authenticated) && hasValidAuthToken;
+      state.sessionAuthenticated = Boolean(payload.authenticated);
       state.sessionUser = payload.user && typeof payload.user === "object" ? payload.user : {};
-      persistStorefrontSessionTokens({
-        accessToken: payload.accessToken,
-        tokenExpiresAt: payload.tokenExpiresAt,
-      });
+      clearStorefrontSessionTokens();
 
       if (!state.sessionAuthenticated) {
         clearStorefrontSessionTokens();
@@ -1289,7 +1347,7 @@ function resolveUserAvatarUrl(user = {}, size = "small") {
   if (typeof avatarCandidate === "number") {
     const avatarId = Math.trunc(avatarCandidate);
     if (avatarId <= 0) return "";
-    return `/api/profile/avatar?id=${avatarId}&size=${encodeURIComponent(size === "big" ? "big" : "small")}`;
+    return storefrontUserAvatarUrl(avatarId, size);
   }
   if (typeof avatarCandidate === "object") {
     return firstNonNull(
@@ -1304,9 +1362,17 @@ function resolveUserAvatarUrl(user = {}, size = "small") {
   return "";
 }
 
-function buildAccountLoginUrl(returnRoute = "") {
+function storefrontUserAvatarUrl(userId, size = "small") {
+  const avatarId = Math.trunc(Number(userId || 0));
+  if (!Number.isFinite(avatarId) || avatarId <= 0) return "";
+  const serviceUrl = metaContent("service-url", "https://selldone.com").replace(/\/+$/, "");
+  const normalizedSize = size === "big" ? "big" : "small";
+  return `${serviceUrl}/users/${avatarId}/profile/avatar/${normalizedSize}`;
+}
+
+function buildAccountLoginUrl(nextRoute = "") {
   const loginUrl = state.sessionLoginUrl || "/auth/storefront/start";
-  const loginReturnRoute = storefrontReturnRoute(returnRoute);
+  const loginReturnRoute = storefrontReturnRoute(nextRoute);
   try {
     const target = new URL(loginUrl, window.location.origin);
     target.searchParams.set("next", loginReturnRoute);
@@ -1317,13 +1383,13 @@ function buildAccountLoginUrl(returnRoute = "") {
 }
 
 function buildAccountLogoutUrl() {
-  const returnRoute = `${window.location.pathname}${window.location.search || ""}${window.location.hash || ""}`;
+  const logoutReturnRoute = `${window.location.pathname}${window.location.search || ""}${window.location.hash || ""}`;
   try {
     const target = new URL("/auth/storefront/logout", window.location.origin);
-    target.searchParams.set("next", returnRoute);
+    target.searchParams.set("next", logoutReturnRoute);
     return `${target.pathname}${target.search}`;
   } catch {
-    return `/auth/storefront/logout?next=${encodeURIComponent(returnRoute)}`;
+    return `/auth/storefront/logout?next=${encodeURIComponent(logoutReturnRoute)}`;
   }
 }
 
@@ -1871,7 +1937,11 @@ async function renderProductPage(productId) {
   let item = cachedProduct;
 
   if (state.dataSource === DATA_SOURCE.xapi && id) {
-    const needsDetail = !cachedProduct || !Array.isArray(cachedProduct.images) || cachedProduct.images.length <= 1;
+    const needsDetail =
+      !cachedProduct ||
+      !Array.isArray(cachedProduct.images) ||
+      cachedProduct.images.length <= 1 ||
+      productNeedsStorefrontDetail(cachedProduct);
     if (needsDetail) {
       const detail = await fetchXapiProductDetail(id);
       if (detail) {
@@ -2137,6 +2207,12 @@ function checkoutLineItem(entry) {
   `;
 }
 
+function productNeedsStorefrontDetail(item) {
+  const variants = getItemVariants(item);
+  if (!variants.length) return false;
+  return variants.some((variant) => !resolveStorefrontVariantId(variant));
+}
+
 async function renderAccountProfilePage() {
   if (!state.sessionAuthenticated) {
     await fetchSessionStatus(true);
@@ -2388,15 +2464,16 @@ async function handleCheckoutSubmit(event) {
       },
       body: JSON.stringify(payload),
     }).catch(() => null);
+    const result = await response?.json().catch(() => ({}));
 
-    if (!response || !response.ok) {
-      const requestPayload = JSON.stringify(payload);
-      console.info("Checkout payload (debug):", requestPayload);
-      throw new Error("Checkout API not available.");
+    if (!response || !response.ok || result?.ok === false) {
+      throw new Error(extractStorefrontErrorMessage(result, response?.status || 0));
     }
 
-    const result = await response.json().catch(() => ({}));
-    const orderId = result.orderId || result.order_id || `PJ-${Date.now()}`;
+    const orderId = firstNonNull(result.orderId, result.order_id, result?.order?.id, result?.basket?.id, "");
+    if (!orderId) {
+      throw new Error("Selldone checkout did not return an order id.");
+    }
     showToast(`Order ${orderId} placed successfully`);
     state.cart = {};
     state.cartSummary = null;
@@ -2406,13 +2483,13 @@ async function handleCheckoutSubmit(event) {
     state.activeCheckoutShippingKey = "";
     renderLiveCatalogEmptyState("Order placed", `Your order ${orderId} has been received. Thank you for shopping with Pajulina.`);
     setTimeout(() => setHash("shop"), 1000);
-  } catch {
+  } catch (error) {
     state.checkoutSubmitting = false;
     if (submitButton) {
       submitButton.removeAttribute("disabled");
       submitButton.textContent = "Place order";
     }
-    showToast("Checkout service is not available right now. Please try again shortly.");
+    showToast(error?.message || "Checkout service is not available right now. Please try again shortly.");
     state.cart = state.cart || {};
     state.cartSummary = null;
     saveCart();
@@ -2591,20 +2668,6 @@ function titleCase(value) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function persistStorefrontSessionTokens(payload = {}) {
-  const token = firstNonNull(payload?.accessToken, "");
-  const expiresAt = Number(payload?.tokenExpiresAt || 0);
-
-  if (token && Number.isFinite(expiresAt) && expiresAt > 0) {
-    localStorage.setItem(STOREFRONT_ACCESS_TOKEN_KEY, token);
-    localStorage.setItem(STOREFRONT_TOKEN_EXPIRES_AT_KEY, String(expiresAt));
-    return;
-  }
-
-  localStorage.removeItem(STOREFRONT_ACCESS_TOKEN_KEY);
-  localStorage.removeItem(STOREFRONT_TOKEN_EXPIRES_AT_KEY);
-}
-
 function clearStorefrontSessionTokens() {
   localStorage.removeItem(STOREFRONT_ACCESS_TOKEN_KEY);
   localStorage.removeItem(STOREFRONT_TOKEN_EXPIRES_AT_KEY);
@@ -2674,6 +2737,18 @@ function cartLineVariant(item, rawVariantKey = "") {
     return candidates[byIndex].variant;
   }
 
+  const compactKey = rawVariantKey.includes(":") ? String(rawVariantKey).split(":").pop() : key;
+  if (compactKey.includes("-")) {
+    const numericSuffix = Number.parseInt(compactKey.split("-").pop(), 10);
+    if (Number.isInteger(numericSuffix) && variants[numericSuffix]) {
+      return variants[numericSuffix];
+    }
+  }
+  const compactIndex = Number.parseInt(compactKey, 10);
+  if (Number.isInteger(compactIndex) && variants[compactIndex]) {
+    return variants[compactIndex];
+  }
+
   return activeProductVariant(item) || candidates[0]?.variant || null;
 }
 
@@ -2700,24 +2775,68 @@ function resolveCartLineVariantMatch(item, rawVariantKey = "") {
 
   const exact = candidates.find((entry) => String(entry.score) === key);
   if (exact) return { variant: exact.variant, matched: true };
+  const compactKey = rawVariantKey.includes(":") ? String(rawVariantKey).split(":").pop() : key;
+  if (compactKey.includes("-")) {
+    const numericSuffix = Number.parseInt(compactKey.split("-").pop(), 10);
+    if (Number.isInteger(numericSuffix) && variants[numericSuffix]) {
+      return { variant: variants[numericSuffix], matched: true };
+    }
+  }
+  const compactIndex = Number.parseInt(compactKey, 10);
+  if (Number.isInteger(compactIndex) && variants[compactIndex]) {
+    return { variant: variants[compactIndex], matched: true };
+  }
   return { variant: null, matched: false };
 }
 
 function resolveStorefrontVariantId(variant = null) {
   if (!variant || typeof variant !== "object") return null;
 
-  const candidate = firstNonNull(
-    variant.variant_id,
-    variant.id,
-    variant.product_variant_id,
-    variant.productVariantId,
-    variant.variantId,
+  const direct = parseStorefrontVariantId(
+    firstNonNull(
+      variant.variant_id,
+      variant.product_variant_id,
+      variant.productVariantId,
+      variant.variantId,
+      variant.id,
+    ),
   );
-  const text = String(candidate || "").trim();
-  if (!/^(?:[1-9]\d*)$/.test(text)) return null;
+  if (direct !== null) return direct;
+  return parseStorefrontVariantIdFromCompoundKey(variant.__key);
+}
 
-  const parsed = Number.parseInt(text, 10);
+function parseStorefrontVariantIdFromCompoundKey(value = "") {
+  const candidate = String(value || "").trim();
+  if (!candidate) return null;
+  const compact = candidate.includes(":") ? candidate.split(":").pop() : candidate;
+  const finalCandidate = compact.includes("-") ? compact.split("-").pop() : compact;
+  return parseStorefrontVariantId(finalCandidate);
+}
+
+function parseStorefrontVariantId(value = null) {
+  const candidate = String(value || "").trim();
+  if (!/^(?:[1-9]\d*)$/.test(candidate)) return null;
+  const parsed = Number.parseInt(candidate, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function isStorefrontVariantIdInList(variants = [], rawVariantId = null) {
+  const target = parseStorefrontVariantId(rawVariantId);
+  if (!Number.isFinite(target)) return false;
+  const targetText = String(target);
+  const list = Array.isArray(variants) ? variants : getItemVariants(variants);
+  return list.some(
+    (entry) =>
+      String(parseStorefrontVariantId(
+        firstNonNull(
+          entry?.variant_id,
+          entry?.product_variant_id,
+          entry?.variantId,
+          entry?.productVariantId,
+          entry?.id,
+        ),
+      ) || parseStorefrontVariantIdFromCompoundKey(entry?.__key) || "") === targetText,
+  );
 }
 
 async function resolveCartLineVariantForStorefront(item, variantKey = "") {
@@ -2726,11 +2845,22 @@ async function resolveCartLineVariantForStorefront(item, variantKey = "") {
 
   const normalizedKey = String(variantKey || "").trim();
   const rawKeyMatch = resolveCartLineVariantMatch(rawItem, normalizedKey);
+  const rawVariants = getItemVariants(rawItem);
   let selected = cartLineVariant(rawItem, variantKey);
   let variantId = resolveStorefrontVariantId(selected);
   let keyMatched = normalizedKey ? rawKeyMatch.matched : true;
+  const rawHasMultiVariants = rawVariants.length > 1;
+  const rawVariantIdMatch = variantId !== null ? isStorefrontVariantIdInList(rawVariants, variantId) : false;
+  const shouldRefresh =
+    rawItem?.id &&
+    state.dataSource === DATA_SOURCE.xapi &&
+    (
+      (rawHasMultiVariants && !variantId) ||
+      (variantId && !rawVariantIdMatch && rawHasMultiVariants) ||
+      (normalizedKey && !rawKeyMatch.matched)
+    );
 
-  if (!variantId && rawItem?.id && state.dataSource === DATA_SOURCE.xapi) {
+  if (shouldRefresh) {
     const refreshedItem = await fetchXapiProductDetail(String(rawItem.id));
     if (refreshedItem) {
       selected = cartLineVariant(refreshedItem, variantKey);
@@ -2878,39 +3008,8 @@ function extractStorefrontBillResponse(payload = {}) {
 }
 
 function extractStorefrontErrorMessage(payload = {}, status = 0) {
-  if (!payload || typeof payload !== "object") {
-    return status ? `Selldone cart API error (${status}).` : "Could not add item to Selldone cart.";
-  }
-
-  const candidates = [
-    payload?.error_msg,
-    payload?.message,
-    payload?.error,
-    payload?.error_message,
-    payload?.reason,
-    payload?.details,
-    payload?.payload?.error_msg,
-    payload?.payload?.message,
-    payload?.payload?.error,
-    payload?.payload?.error_message,
-    payload?.payload?.reason,
-  ];
-
-  for (const candidate of candidates) {
-    if (Array.isArray(candidate)) {
-      return candidate.join(", ");
-    }
-    if (candidate && typeof candidate === "object" && candidate !== payload) {
-      const nested = extractStorefrontErrorMessage(candidate);
-      if (nested) return nested;
-    }
-    if (candidate != null) {
-      const text = String(candidate).trim();
-      if (text) return text;
-    }
-  }
-
-  return status ? `Selldone cart API error (${status}).` : "Could not add item to Selldone cart.";
+  const message = firstStorefrontErrorMessage(payload, status, new WeakSet());
+  return message || (status ? `Selldone cart API error (${status}).` : "Could not add item to Selldone cart.");
 }
 
 function isLikelyStorefrontErrorMessage(message = "") {
@@ -2940,7 +3039,79 @@ function isLikelyStorefrontErrorMessage(message = "") {
 }
 
 function hasStorefrontBasketError(payload = {}, status = 0) {
+  return hasStorefrontBasketErrorValue(payload, status, new WeakSet());
+}
+
+function firstStorefrontErrorMessage(payload = {}, status = 0, visited = new WeakSet()) {
+  if (!payload || typeof payload !== "object") {
+    return status ? `Selldone cart API error (${status}).` : "";
+  }
+  if (visited.has(payload)) return "";
+  visited.add(payload);
+
+  const candidates = [
+    payload?.error_msg,
+    payload?.error_description,
+    payload?.message,
+    payload?.error,
+    payload?.error_message,
+    payload?.reason,
+    payload?.title,
+    payload?.statusMessage,
+    payload?.details,
+  ];
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      for (const entry of candidate) {
+        const nested = typeof entry === "string" ? entry.trim() : firstStorefrontErrorMessage(entry, 0, visited);
+        if (nested) return nested;
+      }
+      continue;
+    }
+    if (typeof candidate === "string") {
+      const text = candidate.trim();
+      if (text) return text;
+    }
+    if (candidate && typeof candidate === "object") {
+      const nested = firstStorefrontErrorMessage(candidate, 0, visited);
+      if (nested) return nested;
+    }
+  }
+
+  const nestedPayloads = [
+    payload?.payload,
+    payload?.data,
+    payload?.result,
+    payload?.response,
+    payload?.bill,
+    payload?.cart,
+    payload?.basket,
+    payload?.summary,
+    payload?.items,
+    payload?.lines,
+    payload?.errors,
+  ];
+  for (const nestedPayload of nestedPayloads) {
+    if (!nestedPayload) continue;
+    if (Array.isArray(nestedPayload)) {
+      for (const entry of nestedPayload) {
+        const nested = firstStorefrontErrorMessage(entry, 0, visited);
+        if (nested) return nested;
+      }
+      continue;
+    }
+    const nested = firstStorefrontErrorMessage(nestedPayload, 0, visited);
+    if (nested) return nested;
+  }
+
+  return "";
+}
+
+function hasStorefrontBasketErrorValue(payload = {}, status = 0, visited = new WeakSet()) {
   if (!payload || typeof payload !== "object") return status >= 400;
+  if (visited.has(payload)) return false;
+  visited.add(payload);
 
   const directFlags = [
     payload?.ok,
@@ -2959,24 +3130,51 @@ function hasStorefrontBasketError(payload = {}, status = 0) {
     if (flag === false) return true;
     if (typeof flag === "string" && flag.trim()) return isLikelyStorefrontErrorMessage(flag);
     if (Array.isArray(flag)) {
-      if (!flag.length) continue;
       const hasErrorEntry = flag.some((entry) => {
         if (typeof entry === "string") return isLikelyStorefrontErrorMessage(entry);
-        if (entry && typeof entry === "object") return hasStorefrontBasketError(entry, 0);
-        return Boolean(entry);
+        if (entry && typeof entry === "object") return hasStorefrontBasketErrorValue(entry, 0, visited);
+        return false;
       });
       if (hasErrorEntry) return true;
       continue;
     }
-    if (flag && typeof flag === "object") {
-      if (hasStorefrontBasketError(flag, 0)) return true;
+    if (flag && typeof flag === "object" && hasStorefrontBasketErrorValue(flag, 0, visited)) {
+      return true;
     }
   }
 
-  if (Array.isArray(payload?.errors) && payload.errors.length) return true;
+  if (Array.isArray(payload?.errors)) {
+    for (const errorEntry of payload.errors) {
+      if (typeof errorEntry === "string") {
+        if (isLikelyStorefrontErrorMessage(errorEntry)) return true;
+      } else if (hasStorefrontBasketErrorValue(errorEntry, 0, visited)) {
+        return true;
+      }
+    }
+  }
 
-  if (payload?.payload && typeof payload.payload === "object") {
-    return hasStorefrontBasketError(payload.payload, 0);
+  const nestedPayloads = [
+    payload?.payload,
+    payload?.data,
+    payload?.result,
+    payload?.response,
+    payload?.bill,
+    payload?.cart,
+    payload?.basket,
+    payload?.summary,
+    payload?.items,
+    payload?.lines,
+    payload?.details,
+  ];
+  for (const nestedPayload of nestedPayloads) {
+    if (!nestedPayload) continue;
+    if (Array.isArray(nestedPayload)) {
+      for (const entry of nestedPayload) {
+        if (hasStorefrontBasketErrorValue(entry, 0, visited)) return true;
+      }
+      continue;
+    }
+    if (hasStorefrontBasketErrorValue(nestedPayload, 0, visited)) return true;
   }
 
   return false;
@@ -3048,6 +3246,8 @@ async function addToCartAsync(productId, variantKey = "") {
   const selected = resolvedVariant.selected;
   const selectedVariantId = resolvedVariant.variantId;
   const keyMatched = resolvedVariant.keyMatched !== false;
+  const itemVariants = getItemVariants(item);
+  const hasVariants = itemVariants.length > 0;
 
   const lineKey = cartLineKey(
     item.id,
@@ -3063,13 +3263,18 @@ async function addToCartAsync(productId, variantKey = "") {
   );
   if (!lineKey) return;
 
-  if (!keyMatched && getItemVariants(item).length > 1) {
+  if (!keyMatched && itemVariants.length > 1) {
     showToast("This selected variant is no longer available. Please reselect an option.");
     return;
   }
 
-  if (selected && !selectedVariantId && getItemVariants(item).length > 1) {
+  if (selected && !selectedVariantId && hasVariants) {
     showToast("This selected variant is not valid anymore. Please reselect an option.");
+    return;
+  }
+
+  if (hasVariants && selectedVariantId && !isStorefrontVariantIdInList(itemVariants, selectedVariantId)) {
+    showToast("This selected variant is not available anymore. Please reselect an option.");
     return;
   }
 
@@ -3084,8 +3289,11 @@ async function addToCartAsync(productId, variantKey = "") {
   const requestBody = {
     count: 1,
     currency: firstNonNull(item.currency, "$"),
-    ...(selectedVariantId ? { variant_id: selectedVariantId } : {}),
   };
+
+  if (selectedVariantId) {
+    requestBody.variant_id = selectedVariantId;
+  }
 
   try {
     const response = await fetch(`/api/storefront/basket/${encodeURIComponent(String(item.id))}`, {
@@ -3113,17 +3321,13 @@ async function addToCartAsync(productId, variantKey = "") {
       return;
     }
 
-    if (basket) {
-      syncCartFromBasketPayload(basket);
-      syncCartSummary(bill);
-    } else {
-      state.cart[lineKey] = (state.cart[lineKey] || 0) + 1;
-      if (bill) {
-        syncCartSummary(bill);
-      } else {
-        state.cartSummary = null;
-      }
+    if (!basket) {
+      showToast("Selldone did not return basket details.");
+      return;
     }
+
+    syncCartFromBasketPayload(basket);
+    syncCartSummary(bill);
 
     if (selected) {
       setActiveProductVariantSelection(item.id, selected);
@@ -3219,12 +3423,12 @@ function showToast(message) {
   showToast.timer = window.setTimeout(() => toast.classList.remove("is-visible"), 1500);
 }
 
-function navigateToAccount(returnRoute = "") {
+function navigateToAccount(nextRoute = "") {
   if (state.sessionAuthenticated) {
     setHash("account");
     return;
   }
-  window.location.assign(buildAccountLoginUrl(returnRoute));
+  window.location.assign(buildAccountLoginUrl(nextRoute));
 }
 
 function updateAccountButton() {

@@ -2,9 +2,6 @@ import { STOREFRONT_SHOP_HANDLE, STOREFRONT_XAPI_BASE } from "./config.mjs";
 import { readJsonBody, sendJson } from "./http.mjs";
 import { ensureAccessToken } from "./auth.mjs";
 
-const checkoutOrderCounter = { value: 0 };
-const storefrontCheckoutOrders = new Map();
-
 function firstArray(...values) {
   return values.find((value) => Array.isArray(value)) || [];
 }
@@ -58,20 +55,10 @@ export async function handleStorefrontApi(req, res, url, storefrontSession = nul
   }
 
   if (url.pathname === "/api/storefront/orders" && req.method === "POST") {
-    const payload = await readJsonBody(req).catch(() => ({}));
-    const orderId = `PJ-${String(++checkoutOrderCounter.value).padStart(4, "0")}`;
-    const order = {
-      orderId,
-      createdAt: new Date().toISOString(),
-      payload: payload || {},
-      status: "received",
-    };
-    storefrontCheckoutOrders.set(orderId, order);
-    sendJson(res, 200, {
-      ok: true,
-      source: "storefront",
-      orderId,
-      order,
+    sendJson(res, 501, {
+      ok: false,
+      source: "storefront_checkout",
+      error: "Selldone checkout is not connected yet. Basket operations are handled by Selldone XAPI; checkout needs a real Selldone gateway endpoint.",
     });
     return true;
   }
@@ -232,11 +219,14 @@ function normalizeStorefrontBasketPayload(payload = {}) {
   const count = Number.parseInt(source.count, 10);
   const rawVariantCandidates = [
     source.variant_id,
-    source.product_variant_id,
     source.variantId,
     source.variant?.id,
     source.variant?.variant_id,
+    source.variant?.variantId,
     source.variant?.product_variant_id,
+    source.variant?.productVariantId,
+    source.product_variant_id,
+    source.productVariantId,
   ];
   const rawVariantId = rawVariantCandidates.find((value) => value !== undefined && value !== null && String(value).trim() !== "");
   const variantId = Number.parseInt(rawVariantId, 10);
@@ -244,7 +234,10 @@ function normalizeStorefrontBasketPayload(payload = {}) {
   return {
     count: Number.isFinite(count) && count > 0 ? count : 1,
     ...(currency ? { currency } : {}),
-    ...(Number.isFinite(variantId) && variantId > 0 ? { variant_id: variantId } : {}),
+    variant_id: Number.isFinite(variantId) && variantId > 0 ? variantId : null,
+    ...(source.preferences !== undefined ? { preferences: source.preferences } : {}),
+    ...(source.vendor_product_id !== undefined ? { vendor_product_id: source.vendor_product_id } : {}),
+    ...(source.price_id !== undefined ? { price_id: source.price_id } : {}),
   };
 }
 
@@ -388,7 +381,13 @@ function clampInteger(value, min, max, fallback) {
   return Math.min(max, Math.max(min, parsed));
 }
 
-function readStorefrontApiMessage(payload) {
+function readStorefrontApiMessage(payload, visited = new WeakSet()) {
+  if (payload == null) return "";
+  if (typeof payload === "string") return payload.trim();
+  if (typeof payload !== "object") return "";
+  if (visited.has(payload)) return "";
+  visited.add(payload);
+
   const candidateValues = [
     payload?.error_msg,
     payload?.error_description,
@@ -397,57 +396,85 @@ function readStorefrontApiMessage(payload) {
     payload?.error_message,
     payload?.reason,
     payload?.statusMessage,
-    payload?.payload?.error_msg,
-    payload?.payload?.error_description,
-    payload?.payload?.message,
-    payload?.payload?.error,
-    payload?.payload?.error_message,
-    payload?.payload?.reason,
-    payload?.payload?.title,
+    payload?.title,
   ];
 
   for (const candidate of candidateValues) {
     if (Array.isArray(candidate)) {
-      return candidate
-        .map((entry) => String(entry || "").trim())
+      const text = candidate
+        .map((entry) => {
+          if (typeof entry === "string") return entry.trim();
+          if (entry && typeof entry === "object") return readStorefrontApiMessage(entry, visited);
+          return String(entry || "").trim();
+        })
         .filter(Boolean)
         .join(", ");
-    }
-    if (candidate != null) {
-      const text = String(candidate).trim();
       if (text) return text;
+      continue;
     }
+
+    if (candidate == null) continue;
+    if (typeof candidate === "object") {
+      const nested = readStorefrontApiMessage(candidate, visited);
+      if (nested) return nested;
+      continue;
+    }
+    const text = String(candidate).trim();
+    if (text) return text;
+  }
+
+  const nestedCandidates = [
+    payload?.payload,
+    payload?.data,
+    payload?.result,
+    payload?.response,
+    payload?.basket,
+    payload?.cart,
+    payload?.bill,
+    payload?.summary,
+    payload?.items,
+    payload?.lines,
+    payload?.details,
+  ];
+  for (const nested of nestedCandidates) {
+    if (!nested) continue;
+    if (Array.isArray(nested)) {
+      const text = nested
+        .map((entry) => {
+          if (typeof entry === "string") return entry.trim();
+          if (entry && typeof entry === "object") return readStorefrontApiMessage(entry, visited);
+          return String(entry || "").trim();
+        })
+        .filter(Boolean)
+        .join(", ");
+      if (text) return text;
+      continue;
+    }
+    const nestedText = readStorefrontApiMessage(nested, visited);
+    if (nestedText) return nestedText;
   }
 
   if (Array.isArray(payload?.errors)) {
     const lines = payload.errors
       .map((item) => {
         if (typeof item === "string") return item.trim();
-        if (item && typeof item === "object") return readStorefrontApiMessage(item);
+        if (item && typeof item === "object") return readStorefrontApiMessage(item, visited);
         return String(item || "").trim();
       })
       .filter(Boolean);
     if (lines.length) return lines.join(", ");
   }
 
-  if (typeof payload === "string") {
-    const text = payload.trim();
-    return text;
-  }
-
-  if (payload && typeof payload === "object") {
-    return JSON.stringify(payload);
-  }
-
   return "";
 }
 
-function detectStorefrontApiError(payload, status = 0) {
-  if (!payload || typeof payload !== "object") {
-    return null;
-  }
+function detectStorefrontApiError(payload, status = 0, visited = new WeakSet()) {
+  if (!payload || typeof payload !== "object") return null;
+  if (visited.has(payload)) return null;
+  visited.add(payload);
 
-  const responseStatus = Number.isFinite(Number(status)) && Number(status) > 0 ? Number(status) : 502;
+  const rawStatus = Number.isFinite(Number(status)) && Number(status) > 0 ? Number(status) : 502;
+  const responseStatus = rawStatus >= 400 ? rawStatus : 409;
   const directFlags = [
     payload.ok,
     payload.success,
@@ -479,7 +506,7 @@ function detectStorefrontApiError(payload, status = 0) {
       const details = flag
         .map((entry) => {
           if (typeof entry === "string") return entry;
-          if (entry && typeof entry === "object") return readStorefrontApiMessage(entry);
+          if (entry && typeof entry === "object") return readStorefrontApiMessage(entry, visited);
           return String(entry || "");
         })
         .filter(Boolean)
@@ -490,14 +517,18 @@ function detectStorefrontApiError(payload, status = 0) {
       };
     }
     if (flag && typeof flag === "object") {
-      const nested = detectStorefrontApiError(flag, status);
+      const nested = detectStorefrontApiError(flag, status, visited);
       if (nested) return nested;
     }
   }
 
   if (Array.isArray(payload.errors) && payload.errors.length) {
     const details = payload.errors
-      .map((entry) => (typeof entry === "string" ? entry : readStorefrontApiMessage(entry)))
+      .map((entry) => {
+        if (typeof entry === "string") return entry;
+        if (entry && typeof entry === "object") return readStorefrontApiMessage(entry, visited);
+        return String(entry || "");
+      })
       .filter(Boolean)
       .join(", ");
     return {
@@ -506,9 +537,30 @@ function detectStorefrontApiError(payload, status = 0) {
     };
   }
 
-  const nestedPayload = payload.payload;
-  if (nestedPayload && typeof nestedPayload === "object") {
-    const nested = detectStorefrontApiError(nestedPayload, status);
+  const nestedPayloads = [
+    payload?.payload,
+    payload?.data,
+    payload?.result,
+    payload?.response,
+    payload?.basket,
+    payload?.cart,
+    payload?.bill,
+    payload?.summary,
+    payload?.items,
+    payload?.lines,
+    payload?.details,
+  ];
+  for (const nestedPayload of nestedPayloads) {
+    if (!nestedPayload) continue;
+    if (Array.isArray(nestedPayload)) {
+      for (const entry of nestedPayload) {
+        const nested = detectStorefrontApiError(entry, status, visited);
+        if (nested) return nested;
+      }
+      continue;
+    }
+
+    const nested = detectStorefrontApiError(nestedPayload, status, visited);
     if (nested) return nested;
   }
 

@@ -112,13 +112,10 @@ export function createRequestHandler() {
         const session = getSession(req, res, SESSION_CONTEXTS.STOREFRONT);
         let authenticated = false;
         let user = fallbackUserProfile();
-        let accessToken = "";
-        let tokenExpiresAt = 0;
         try {
-          accessToken = await ensureAccessToken(session);
+          const accessToken = await ensureAccessToken(session);
           authenticated = Boolean(accessToken);
           if (authenticated) {
-            tokenExpiresAt = Number(session.tokens?.expires_at || 0);
             try {
               user = await userProfilePayload(session);
             } catch (error) {
@@ -137,11 +134,7 @@ export function createRequestHandler() {
           shop: SHOP,
           user,
           scopes: STOREFRONT_SCOPES,
-          apiBaseUrl: API_BASE,
-          endpoints: publicEndpointConfig(),
-          accessToken,
-          tokenExpiresAt,
-          tokenType: authenticated ? "Bearer" : "",
+          sessionContext: SESSION_CONTEXTS.STOREFRONT,
         });
         return;
       }

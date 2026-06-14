@@ -1,4 +1,4 @@
-import * as storefront from "./app-core.js";
+import * as storefront from "./app-core.js?v=storefront-cart-20260614";
 
 const {
   state,
@@ -181,7 +181,11 @@ export function registerStorefrontInteractions() {
 
       const variants = getItemVariants(item);
       const key = String(variantOption.dataset.variantKey || "").trim();
-      const selected = variants.find((entry) => String(firstNonNull(entry.__key, entry.__index, entry.id, entry.sku, entry.code, entry.name, entry.title) || "") === key) ||
+      const selected =
+        variants.find((entry) =>
+          String(firstNonNull(entry.__key, entry.__index, entry.variant_id, entry.product_variant_id, entry.id, entry.sku, entry.code, entry.name, entry.title) || "") ===
+          key,
+        ) ||
         (key ? variants.find((entry, index) => String(index) === key) : null);
       if (!selected) return;
 

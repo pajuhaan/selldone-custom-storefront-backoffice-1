@@ -76,7 +76,7 @@ export const DEFAULT_SCOPES = [
 ];
 
 export const DEFAULT_STOREFRONT_SCOPES = [
-  ...DEFAULT_SCOPES,
+  "profile",
   "phone",
   "address",
   "user:profile:write",
@@ -84,6 +84,8 @@ export const DEFAULT_STOREFRONT_SCOPES = [
   "order-history",
   "my-gift-cards",
 ];
+
+const STOREFRONT_SCOPE_SET = new Set(DEFAULT_STOREFRONT_SCOPES);
 
 export const DEFAULT_ENV = {
   SETUP_COMPLETE: "false",
@@ -139,11 +141,6 @@ export function getRuntimeConfig() {
   ENV_KEYS.forEach((key) => {
     if (process.env[key] !== undefined) merged[key] = process.env[key];
   });
-  const storefrontScopeCandidates = splitScopes(merged.STOREFRONT_SCOPES);
-  const storefrontScopes =
-    storefrontScopeCandidates.length > 0
-      ? Array.from(new Set([...storefrontScopeCandidates, ...DEFAULT_STOREFRONT_SCOPES]))
-      : [...DEFAULT_STOREFRONT_SCOPES];
 
   return {
     ...merged,
@@ -151,7 +148,7 @@ export function getRuntimeConfig() {
     port: toInteger(merged.PORT, 5173),
     shopId: toInteger(merged.SHOP_ID, 0),
     scopes: splitScopes(merged.SCOPES),
-    storefrontScopes,
+    storefrontScopes: normalizeStorefrontScopes(merged.STOREFRONT_SCOPES),
   };
 }
 
@@ -201,6 +198,11 @@ function splitScopes(value) {
     .split(/[,\s]+/)
     .map((scope) => scope.trim())
     .filter(Boolean);
+}
+
+function normalizeStorefrontScopes(value) {
+  const requestedScopes = splitScopes(value).filter((scope) => STOREFRONT_SCOPE_SET.has(scope));
+  return Array.from(new Set([...DEFAULT_STOREFRONT_SCOPES, ...requestedScopes]));
 }
 
 function toInteger(value, fallback) {

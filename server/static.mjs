@@ -69,6 +69,14 @@ function serveFromRoot(res, staticRoot, requestedPath) {
     ".svg": "image/svg+xml",
   }[extname(filePath)] || "application/octet-stream";
 
-  res.writeHead(200, { "Content-Type": type });
+  const extension = extname(filePath);
+  const cacheControl = [".html", ".js", ".mjs", ".css", ".json"].includes(extension)
+    ? "no-store, no-cache, must-revalidate, max-age=0"
+    : "public, max-age=3600";
+
+  res.writeHead(200, {
+    "Content-Type": type,
+    "Cache-Control": cacheControl,
+  });
   createReadStream(filePath).pipe(res);
 }
