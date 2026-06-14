@@ -69,11 +69,14 @@
             <input type="search" name="q" placeholder="Search Pajulina Beauty" autocomplete="off" data-site-search />
           </form>
           <div class="nav-actions">
-            <button class="icon-button" type="button" aria-label="Account">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M20 21a8 8 0 0 0-16 0M12 13a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z" />
-              </svg>
-            </button>
+            <div class="account-control" data-account-control>
+              <button class="icon-button" type="button" aria-label="Account" data-account-button>
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M20 21a8 8 0 0 0-16 0M12 13a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z" />
+                </svg>
+              </button>
+              <div class="account-menu" data-account-menu aria-live="polite"></div>
+            </div>
             <button class="icon-button cart-button" type="button" aria-label="Open bag" data-cart-open>
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M7 8h10l1.2 12H5.8L7 8ZM9 8a3 3 0 0 1 6 0" />
@@ -161,7 +164,7 @@
         <div class="cart-items" data-cart-items></div>
         <div class="cart-summary">
           <div><span>Subtotal</span><strong data-cart-subtotal>$0.00</strong></div>
-          <button type="button">Checkout</button>
+          <button type="button" data-cart-checkout>Checkout</button>
         </div>
       </section>
     </aside>

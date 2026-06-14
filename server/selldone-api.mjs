@@ -1,7 +1,5 @@
 import { API_BASE, ARTICLE_UPDATE_FIELDS, CUSTOMER_UPDATE_FIELDS, ENDPOINTS, PRODUCT_UPDATE_FIELDS, PROFILE_ENDPOINT, SHOP, SHOP_ID } from "./config.mjs";
 import { ensureAccessToken } from "./auth.mjs";
-import { sendJson } from "./http.mjs";
-
 const guardedBackofficeLogs = new Map();
 
 export async function selldoneApi(session, path, params = {}) {
@@ -447,16 +445,44 @@ export async function userProfilePayload(session) {
 }
 
 function normalizeUserProfile(payload = {}) {
-  const profile = payload.profile || (Array.isArray(payload.profiles) ? payload.profiles[0] : null) || {};
-  const name = profile.name || profile.full_name || profile.title || "Selldone user";
-  const email = profile.email || "";
-  const id = Number(profile.id || 0);
+  const profileCandidates = [
+    payload?.profile,
+    payload?.user,
+    payload?.customer,
+    Array.isArray(payload?.profiles) ? payload.profiles[0] : null,
+  ].filter((candidate) => candidate && typeof candidate === "object" && !Array.isArray(candidate));
+
+  const profile = profileCandidates[0] || {};
+  const firstName = String(profile.first_name || profile.firstName || "").trim();
+  const lastName = String(profile.last_name || profile.lastName || "").trim();
+  const fullName = String(
+    profile.name || profile.full_name || profile.title || `${firstName} ${lastName}`.trim() || ""
+  ).trim();
+  const name = fullName || "Selldone user";
+  const email = String(profile.email || "").trim();
+  const id = Number(profile.id || profile.profile_id || profile.user_id || 0);
+  const city =
+    String(profile.city || profile.city_name || profile.address?.city || profile.billing?.city || profile.state || "").trim() || "";
+  const address = String(
+    profile.address ||
+      profile.billing?.address ||
+      profile.location?.address ||
+      profile.address1 ||
+      profile.address_line ||
+      ""
+  ).trim();
 
   return {
     id,
     name,
     email,
-    avatarUrl: `/api/profile/avatar?id=${encodeURIComponent(id || 0)}`,
+    firstName,
+    lastName,
+    phone: String(profile.phone || "").trim(),
+    username: String(profile.username || "").trim(),
+    address,
+    city,
+    avatarUrl: `/api/profile/avatar?id=${encodeURIComponent(String(profile.avatarId || profile.id || profile.user_id || 0))}&size=small`,
   };
 }
 
@@ -465,33 +491,93 @@ export function fallbackUserProfile() {
     id: 0,
     name: "Selldone user",
     email: "",
+    firstName: "",
+    lastName: "",
+    phone: "",
+    username: "",
+    address: "",
+    city: "",
     avatarUrl: "",
   };
 }
 
-export async function sendProfileAvatar(req, res, session, url) {
-  const token = await ensureAccessToken(session);
-  if (!token) {
-    sendJson(res, 401, { error: "Authentication required" });
+export async function sendProfileAvatar(req, res, session, url, fallbackSession = null) {
+  const userId = Number(url.searchParams.get("id"));
+  if (!Number.isFinite(userId) || userId <= 0) {
+    res.writeHead(400, {
+      "Content-Type": "text/plain; charset=utf-8",
+    });
+    res.end("Missing or invalid user id");
     return;
   }
 
-  const profileId = Number(url.searchParams.get("id") || 0);
-  const avatarUrl = `${API_BASE}/profile/image/${Number.isFinite(profileId) ? profileId : 0}/avatar92.jpg`;
-  const response = await fetch(avatarUrl, {
-    headers: {
-      Accept: "image/*",
-      Authorization: `Bearer ${token}`,
-      "X-Requested-With": "XMLHttpRequest",
-    },
-  });
+  const token = await resolveAvatarAccessToken(session, fallbackSession);
+  if (!token) {
+    res.writeHead(401, {
+      "Content-Type": "text/plain; charset=utf-8",
+    });
+    res.end("Authentication required");
+    return;
+  }
 
-  const buffer = Buffer.from(await response.arrayBuffer());
-  res.writeHead(response.ok ? 200 : 404, {
-    "Content-Type": response.headers.get("content-type") || "image/png",
-    "Cache-Control": "private, max-age=300",
+  const avatarId = Math.trunc(userId);
+  const size = normalizeAvatarSize(url.searchParams.get("size") || "small");
+  const candidates = [
+    `${API_BASE}/users/${avatarId}/profile/avatar/${size}`,
+    `${API_BASE}/profile/image/${avatarId}/avatar${size === "big" ? "192" : "92"}.jpg`,
+    `${API_BASE}/profile/image/${avatarId}/avatar92.jpg`,
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      const response = await fetch(candidate, {
+        headers: {
+          Accept: "image/*",
+          Authorization: `Bearer ${token}`,
+          "X-Requested-With": "XMLHttpRequest",
+        },
+      });
+      if (!response.ok) {
+        continue;
+      }
+      const buffer = Buffer.from(await response.arrayBuffer());
+      res.writeHead(200, {
+        "Content-Type": response.headers.get("content-type") || "image/png",
+        "Cache-Control": "private, max-age=300",
+      });
+      res.end(buffer);
+      return;
+    } catch {
+      continue;
+    }
+  }
+
+  res.writeHead(404, {
+    "Content-Type": "text/plain; charset=utf-8",
+    "Cache-Control": "private, max-age=30",
   });
-  res.end(buffer);
+  res.end("Avatar not found");
+}
+
+async function resolveAvatarAccessToken(session, fallbackSession) {
+  const token = await safeGetAccessToken(session);
+  if (token) return token;
+  if (!fallbackSession) return null;
+  return safeGetAccessToken(fallbackSession);
+}
+
+async function safeGetAccessToken(session) {
+  try {
+    return await ensureAccessToken(session);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeAvatarSize(value) {
+  const size = String(value || "").trim().toLowerCase();
+  if (size === "big") return "big";
+  return "small";
 }
 
 export function publicEndpointConfig() {

@@ -75,6 +75,16 @@ export const DEFAULT_SCOPES = [
   "selldone:monetization:write",
 ];
 
+export const DEFAULT_STOREFRONT_SCOPES = [
+  ...DEFAULT_SCOPES,
+  "phone",
+  "address",
+  "user:profile:write",
+  "buy",
+  "order-history",
+  "my-gift-cards",
+];
+
 export const DEFAULT_ENV = {
   SETUP_COMPLETE: "false",
   PORT: "5173",
@@ -91,6 +101,7 @@ export const DEFAULT_ENV = {
   SHOP_NAME: "Pajulina",
   SHOP_DOMAIN: "https://pajulina.myselldone.com",
   STOREFRONT_SHOP_HANDLE: "pajulina",
+  STOREFRONT_SCOPES: DEFAULT_STOREFRONT_SCOPES.join(","),
   SCOPES: DEFAULT_SCOPES.join(","),
 };
 
@@ -128,6 +139,11 @@ export function getRuntimeConfig() {
   ENV_KEYS.forEach((key) => {
     if (process.env[key] !== undefined) merged[key] = process.env[key];
   });
+  const storefrontScopeCandidates = splitScopes(merged.STOREFRONT_SCOPES);
+  const storefrontScopes =
+    storefrontScopeCandidates.length > 0
+      ? Array.from(new Set([...storefrontScopeCandidates, ...DEFAULT_STOREFRONT_SCOPES]))
+      : [...DEFAULT_STOREFRONT_SCOPES];
 
   return {
     ...merged,
@@ -135,6 +151,7 @@ export function getRuntimeConfig() {
     port: toInteger(merged.PORT, 5173),
     shopId: toInteger(merged.SHOP_ID, 0),
     scopes: splitScopes(merged.SCOPES),
+    storefrontScopes,
   };
 }
 

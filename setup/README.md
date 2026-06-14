@@ -36,6 +36,12 @@ Use the connected Selldone MCP tool for creating/updating a shop-bound dashboard
   "allow_development_wildcard_redirects": true,
   "requested_scopes": [
     "profile",
+    "phone",
+    "address",
+    "user:profile:write",
+    "buy",
+    "order-history",
+    "my-gift-cards",
     "backoffice:shop:read",
     "backoffice:shop:write",
     "backoffice:product:read",
@@ -49,7 +55,7 @@ Use the connected Selldone MCP tool for creating/updating a shop-bound dashboard
 
 The current MCP tool name in this Codex environment is:
 
-`mcp__codex_apps__selldone_mcp___pajulina___chatgp._a78aa80dbbb0`
+`mcp__codex_apps__selldone_mcp___pajulina___chatgp`
 
 Direct Selldone API fallback:
 

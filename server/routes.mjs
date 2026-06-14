@@ -1,7 +1,7 @@
-import { API_BASE, AUTH_PROMPT, SCOPES, SHOP, SHOP_ID } from "./config.mjs";
-import { ensureAccessToken, handleCallback, startAuth } from "./auth.mjs";
+import { API_BASE, AUTH_PROMPT, SCOPES, SHOP, SHOP_ID, STOREFRONT_SCOPES } from "./config.mjs";
+import { ensureAccessToken, handleCallback, sanitizeAuthReturnRoute, startAuth, startAuthForContext } from "./auth.mjs";
 import { clearStoredTokens } from "./token-store.mjs";
-import { destroySession, getSession } from "./session.mjs";
+import { SESSION_CONTEXTS, destroySession, getSession } from "./session.mjs";
 import { cookie, getOrigin, parseCookies, readJsonBody, redirect, sendJson } from "./http.mjs";
 import {
   articleIdFromApiPath,
@@ -11,6 +11,7 @@ import {
   callProductsEndpoint,
   dashboardPayload,
   fallbackUserProfile,
+  userProfilePayload,
   productIdFromApiPath,
   publicEndpointConfig,
   sanitizeArticleUpdatePayload,
@@ -37,8 +38,13 @@ export function createRequestHandler() {
         return;
       }
 
-      if (url.pathname === "/auth/start") {
+      if (url.pathname === "/auth/start" || url.pathname === "/auth/dashboard/start") {
         await startAuth(req, res);
+        return;
+      }
+
+      if (url.pathname === "/auth/storefront/start") {
+        await startAuthForContext(req, res, STOREFRONT_SCOPES, SESSION_CONTEXTS.STOREFRONT);
         return;
       }
 
@@ -47,16 +53,25 @@ export function createRequestHandler() {
         return;
       }
 
-      if (url.pathname === "/auth/logout") {
+      if (url.pathname === "/auth/logout" || url.pathname === "/auth/dashboard/logout") {
         const cookies = parseCookies(req);
         destroySession(cookies.pajulina_dashboard_sid);
         clearStoredTokens();
-        redirect(res, "/dashboard/", { "Set-Cookie": cookie("pajulina_dashboard_sid", "", { maxAge: 0, httpOnly: true }) });
+        const redirectAfterLogout = sanitizeAuthReturnRoute(req, url.searchParams.get("next")) || "/";
+        redirect(res, redirectAfterLogout, { "Set-Cookie": cookie("pajulina_dashboard_sid", "", { maxAge: 0, httpOnly: true }) });
         return;
       }
 
-      if (url.pathname === "/api/session") {
-        const session = getSession(req, res);
+      if (url.pathname === "/auth/storefront/logout") {
+        const cookies = parseCookies(req);
+        destroySession(cookies.pajulina_storefront_sid);
+        const redirectAfterLogout = sanitizeAuthReturnRoute(req, url.searchParams.get("next")) || "/";
+        redirect(res, redirectAfterLogout, { "Set-Cookie": cookie("pajulina_storefront_sid", "", { maxAge: 0, httpOnly: true }) });
+        return;
+      }
+
+      if (url.pathname === "/api/session" || url.pathname === "/api/dashboard/session") {
+        const session = getSession(req, res, SESSION_CONTEXTS.DASHBOARD);
         let authenticated = false;
         let user = fallbackUserProfile();
         let accessToken = "";
@@ -66,6 +81,13 @@ export function createRequestHandler() {
           authenticated = Boolean(accessToken);
           if (authenticated) {
             tokenExpiresAt = Number(session.tokens?.expires_at || 0);
+            try {
+              user = await userProfilePayload(session);
+            } catch (error) {
+              if (error?.status === 401 || error?.status === 403) {
+                authenticated = false;
+              }
+            }
           }
         } catch {
           authenticated = false;
@@ -86,9 +108,48 @@ export function createRequestHandler() {
         return;
       }
 
+      if (url.pathname === "/api/storefront/session") {
+        const session = getSession(req, res, SESSION_CONTEXTS.STOREFRONT);
+        let authenticated = false;
+        let user = fallbackUserProfile();
+        let accessToken = "";
+        let tokenExpiresAt = 0;
+        try {
+          accessToken = await ensureAccessToken(session);
+          authenticated = Boolean(accessToken);
+          if (authenticated) {
+            tokenExpiresAt = Number(session.tokens?.expires_at || 0);
+            try {
+              user = await userProfilePayload(session);
+            } catch (error) {
+              if (error?.status === 401 || error?.status === 403) {
+                authenticated = false;
+              }
+            }
+          }
+        } catch {
+          authenticated = false;
+        }
+        sendJson(res, 200, {
+          authenticated,
+          loginUrl: "/auth/storefront/start",
+          authPrompt: AUTH_PROMPT,
+          shop: SHOP,
+          user,
+          scopes: STOREFRONT_SCOPES,
+          apiBaseUrl: API_BASE,
+          endpoints: publicEndpointConfig(),
+          accessToken,
+          tokenExpiresAt,
+          tokenType: authenticated ? "Bearer" : "",
+        });
+        return;
+      }
+
       if (url.pathname === "/api/profile/avatar") {
-        const session = getSession(req, res);
-        await sendProfileAvatar(req, res, session, url);
+        const storefrontSession = getSession(req, res, SESSION_CONTEXTS.STOREFRONT);
+        const dashboardSession = getSession(req, res, SESSION_CONTEXTS.DASHBOARD);
+        await sendProfileAvatar(req, res, storefrontSession, url, dashboardSession);
         return;
       }
 
@@ -102,7 +163,8 @@ export function createRequestHandler() {
       }
 
       if (url.pathname.startsWith("/api/storefront/")) {
-        if (await handleStorefrontApi(req, res, url)) return;
+        const storefrontSession = getSession(req, res, SESSION_CONTEXTS.STOREFRONT);
+        if (await handleStorefrontApi(req, res, url, storefrontSession)) return;
         sendJson(res, 404, { error: "Storefront API route not found" });
         return;
       }

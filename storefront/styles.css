@@ -202,6 +202,170 @@ img {
   background: var(--soft);
 }
 
+.account-control {
+  position: relative;
+}
+
+.account-control .account-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: min(260px, calc(100vw - 24px));
+  padding: 10px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 18px 36px rgba(17, 17, 17, 0.18);
+  z-index: 40;
+  display: none;
+}
+
+.account-control.is-open .account-menu,
+.account-control:hover .account-menu {
+  display: block;
+}
+
+.account-menu-user {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 8px;
+}
+
+.account-menu-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: var(--soft);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.account-menu-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.account-button-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: var(--soft);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.account-button-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.account-button-avatar--initials {
+  text-transform: uppercase;
+}
+
+.account-menu-meta strong {
+  display: block;
+  font-size: 13px;
+}
+
+.account-menu-meta p {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.account-menu-links {
+  display: grid;
+  gap: 8px;
+}
+
+.account-menu-links .text-link {
+  font-size: 11px;
+  text-align: left;
+}
+
+.account-menu-links .black-button {
+  width: 100%;
+  justify-content: center;
+}
+
+.account-profile-panel {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #ffffff;
+  padding: 16px;
+}
+
+.account-profile-head {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.account-profile-head h1 {
+  margin: 0 0 4px;
+}
+
+.account-profile-fields {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.account-profile-field {
+  display: grid;
+  gap: 4px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.account-profile-field:last-child {
+  border-bottom: 0;
+}
+
+.account-profile-field span {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.account-profile-field strong {
+  font-size: 14px;
+}
+
+.account-profile-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.account-profile-actions .black-button {
+  border: 0;
+}
+
+.account-menu-avatar--large {
+  width: 52px;
+  height: 52px;
+}
+
 .menu-button {
   display: none;
 }
@@ -1174,6 +1338,9 @@ img.large-sprite {
   padding: 2px;
   background: transparent;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .shade-dot span {
@@ -1182,6 +1349,18 @@ img.large-sprite {
   height: 100%;
   border-radius: inherit;
   background: var(--shade);
+}
+
+.shade-dot-label {
+  font-size: 8px;
+  line-height: 1;
+  font-weight: 650;
+  color: #1f1f1f;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
 }
 
 .shade-dot.is-active {
@@ -1201,10 +1380,23 @@ img.large-sprite {
   padding: 10px;
   text-align: center;
   font-size: 11px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.delivery-card:hover {
+  border-color: var(--ink);
+}
+
+.delivery-card:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .delivery-card.is-active {
   border-color: var(--ink);
+  background: #f7fbef;
 }
 
 .delivery-card strong {
@@ -1625,6 +1817,149 @@ img.large-sprite {
 .cart-summary button {
   width: 100%;
   min-height: 44px;
+}
+
+.checkout-page {
+  margin-top: 4px;
+}
+
+.checkout-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  gap: 18px;
+  align-items: start;
+}
+
+.checkout-form-box {
+  min-width: 0;
+}
+
+.checkout-panel,
+.checkout-summary-box {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 16px;
+}
+
+.checkout-form-box h1 {
+  margin: 0 0 6px;
+  font-size: 28px;
+}
+
+.checkout-form-fields {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.checkout-form-fields label {
+  display: grid;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.checkout-form-fields input,
+.checkout-form-fields textarea {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0 10px;
+  outline: none;
+  font-size: 12px;
+  resize: vertical;
+}
+
+.checkout-form-fields textarea {
+  padding-top: 9px;
+}
+
+.checkout-form-fields input:focus,
+.checkout-form-fields textarea:focus {
+  border-color: var(--ink);
+}
+
+.checkout-login-note {
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.checkout-summary-box h2 {
+  margin: 0 0 10px;
+  font-size: 18px;
+}
+
+.checkout-summary-list {
+  display: grid;
+  gap: 10px;
+}
+
+.checkout-line-item {
+  display: grid;
+  grid-template-columns: 58px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed #d8dfbc;
+}
+
+.checkout-line-item:last-child {
+  border-bottom: 0;
+}
+
+.checkout-line-media {
+  aspect-ratio: 1;
+  border-radius: 4px;
+  background: var(--soft);
+}
+
+.checkout-line-item h4 {
+  margin: 0 0 4px;
+  font-size: 12px;
+}
+
+.checkout-line-item p {
+  margin: 0;
+}
+
+.checkout-line-pricing {
+  text-align: right;
+  font-size: 12px;
+}
+
+.checkout-line-pricing strong {
+  display: block;
+  margin-top: 3px;
+}
+
+.checkout-summary-total {
+  margin-top: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.checkout-summary-total div {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.checkout-summary-total-final {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+@media (max-width: 980px) {
+  .checkout-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .checkout-form-box h1 {
+    font-size: 22px;
+  }
 }
 
 .floating-help {

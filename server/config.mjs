@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { DEFAULT_SCOPES, getRuntimeConfig, loadEnvFile } from "../setup/env.mjs";
+import { DEFAULT_SCOPES, DEFAULT_STOREFRONT_SCOPES, getRuntimeConfig, loadEnvFile } from "../setup/env.mjs";
 
 loadEnvFile();
 
@@ -15,6 +15,7 @@ export let SHOP_ID;
 export let STOREFRONT_SHOP_HANDLE;
 export let STOREFRONT_XAPI_BASE;
 export let SCOPES;
+export let STOREFRONT_SCOPES;
 export let SHOP;
 export let ENDPOINTS;
 export let PROFILE_ENDPOINT;
@@ -32,6 +33,7 @@ export function reloadRuntimeConfig() {
   STOREFRONT_SHOP_HANDLE = config.STOREFRONT_SHOP_HANDLE;
   STOREFRONT_XAPI_BASE = config.STOREFRONT_XAPI_BASE;
   SCOPES = config.scopes.length ? config.scopes : DEFAULT_SCOPES;
+  STOREFRONT_SCOPES = config.storefrontScopes.length ? config.storefrontScopes : DEFAULT_STOREFRONT_SCOPES;
   SHOP = {
     id: SHOP_ID,
     name: config.SHOP_NAME,
