@@ -23,6 +23,7 @@ This project is a custom Selldone storefront plus backoffice dashboard. Follow t
 - Preserve Selldone API request/response shapes. Normalize only inside feature modules for UI rendering.
 - If a scope is missing, surface a reconnect-with-consent message rather than inventing fallback data.
 - Storefront OAuth must stay separate from dashboard OAuth. Storefront scopes are limited to `profile`, `phone`, `address`, `user:profile:write`, `buy`, `order-history`, and `my-gift-cards`; do not add dashboard/backoffice scopes to storefront login.
+- Storefront cart reads and mutations must go through local web-app endpoints, never direct browser XAPI calls. This shop sells physical products only, so `GET /api/storefront/basket` must load the physical basket from Selldone shop-info `baskets` and bill data; use `PUT /api/storefront/basket/{product_id}` with the final `count` to update an item. Only update client cart state after Selldone returns a successful physical basket/bill response.
 
 ## Selldone Image URL Standard
 

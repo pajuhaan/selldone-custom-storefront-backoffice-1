@@ -1,4 +1,4 @@
-import * as storefront from "./app-core.js?v=storefront-cart-20260614b";
+import * as storefront from "./app-core.js?v=storefront-cart-20260614c";
 
 const {
   state,
@@ -23,6 +23,7 @@ const {
   renderShopPage,
   route,
   setActiveProductVariantSelection,
+  setCartQuantity,
   setHash,
   setHeroSlide,
   shadeName,
@@ -211,9 +212,15 @@ export function registerStorefrontInteractions() {
       return;
     }
 
+    const cartRemove = event.target.closest("[data-cart-remove-key]");
+    if (cartRemove) {
+      void setCartQuantity(cartRemove.dataset.cartRemoveKey, 0);
+      return;
+    }
+
     const cartQty = event.target.closest("[data-cart-key]");
     if (cartQty) {
-      updateQuantity(cartQty.dataset.cartKey, Number(cartQty.dataset.delta));
+      void updateQuantity(cartQty.dataset.cartKey, Number(cartQty.dataset.delta));
       return;
     }
 
@@ -241,6 +248,12 @@ export function registerStorefrontInteractions() {
   });
 
   document.addEventListener("change", (event) => {
+    const cartQuantity = event.target.closest("[data-cart-quantity]");
+    if (cartQuantity) {
+      void setCartQuantity(cartQuantity.dataset.cartQuantity, cartQuantity.value);
+      return;
+    }
+
     const sort = event.target.closest("[data-sort-select]");
     if (!sort) return;
     state.activeSort = sort.value;

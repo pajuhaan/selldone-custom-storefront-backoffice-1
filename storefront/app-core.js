@@ -112,6 +112,10 @@ const state = {
   sessionUser: {},
   accountMenuOpen: false,
   checkoutSubmitting: false,
+  cartLoaded: false,
+  cartLoading: false,
+  cartLoadError: "",
+  cartUpdatingKeys: new Set(),
   xapiEndpoint: null,
   activeProductGallery: [],
   activeHeroSlide: 0,
@@ -126,6 +130,10 @@ const els = {
   cartCount: document.querySelector("[data-cart-count]"),
   cartTitle: document.querySelector("[data-cart-title]"),
   cartSubtotal: document.querySelector("[data-cart-subtotal]"),
+  cartShipping: document.querySelector("[data-cart-shipping]"),
+  cartShippingRow: document.querySelector("[data-cart-shipping-row]"),
+  cartTotal: document.querySelector("[data-cart-total]"),
+  cartSummaryNote: document.querySelector("[data-cart-summary-note]"),
   searchInput: document.querySelector("[data-site-search]"),
   primaryLinks: document.querySelector("[data-primary-links]"),
   accountButton: document.querySelector("[data-account-button]"),
@@ -1266,6 +1274,7 @@ async function fetchSessionStatus(force = false) {
       state.sessionUser = {};
       clearStorefrontSessionTokens();
       state.accountMenuOpen = false;
+      clearStorefrontCartState({ loaded: true });
     } else {
       state.sessionAuthenticated = Boolean(payload.authenticated);
       state.sessionUser = payload.user && typeof payload.user === "object" ? payload.user : {};
@@ -1275,6 +1284,7 @@ async function fetchSessionStatus(force = false) {
         clearStorefrontSessionTokens();
         state.sessionUser = {};
         state.accountMenuOpen = false;
+        clearStorefrontCartState({ loaded: true });
       }
       const loginUrl = firstNonNull(payload.loginUrl, "/auth/storefront/start");
       state.sessionLoginUrl = loginUrl === "/auth/start" ? "/auth/storefront/start" : loginUrl;
@@ -1306,6 +1316,7 @@ function clearStorefrontSessionState() {
   state.sessionUser = {};
   state.accountMenuOpen = false;
   clearStorefrontSessionTokens();
+  clearStorefrontCartState({ loaded: true });
 }
 
 function userDisplayName(user = {}) {
@@ -1535,6 +1546,9 @@ async function route() {
   await bootstrapProducts();
   if (state.isLoading) return;
   await fetchSessionStatus();
+  if (state.sessionAuthenticated) {
+    await hydrateStorefrontCart();
+  }
   updateAccountButton();
   closeAccountMenu();
 
@@ -2283,6 +2297,9 @@ async function renderAccountProfilePage() {
 }
 
 async function renderCheckoutPage() {
+  if (state.sessionAuthenticated) {
+    await hydrateStorefrontCart();
+  }
   const entries = cartEntries();
   if (!entries.length) {
     renderLiveCatalogEmptyState("Your bag is empty", "Add at least one item before starting checkout.");
@@ -2925,15 +2942,59 @@ function variantKeyFromBasketLine(line = {}, item = null) {
   );
 }
 
-function syncCartFromBasketPayload(payload = {}) {
+function basketLineEntries(payload = {}) {
   const basket = payload && typeof payload === "object" ? payload : null;
-  const entries = firstArrayValue(
+  return firstArrayValue(
     basket?.items,
     basket?.lines,
     basket?.basket_items,
     basket?.data?.items,
     basket?.result?.items,
+    basket?.payload?.items,
+    basket?.payload?.basket_items,
   );
+}
+
+function upsertStorefrontProduct(product) {
+  const mapped = mapProduct(product);
+  if (!mapped?.id) return null;
+  const index = state.products.findIndex((entry) => String(entry.id) === String(mapped.id));
+  if (index >= 0) {
+    state.products[index] = { ...state.products[index], ...mapped };
+  } else {
+    state.products.push(mapped);
+  }
+  return mapped;
+}
+
+async function ensureBasketProductsAvailable(basket = {}) {
+  const entries = basketLineEntries(basket);
+  const missingIds = new Set();
+
+  entries.forEach((line) => {
+    const product = firstNonNull(line?.product, line?.item, line?.product_data, line?.data?.product);
+    const mapped = product && typeof product === "object" ? upsertStorefrontProduct(product) : null;
+    const productId = firstNonNull(
+      mapped?.id,
+      line?.product_id,
+      line?.productId,
+      line?.product?.id,
+      line?.product?.product_id,
+      line?.id,
+      line?.sku,
+    );
+    if (productId && !getProductById(String(productId))) {
+      missingIds.add(String(productId));
+    }
+  });
+
+  if (!missingIds.size) return;
+  await Promise.all(Array.from(missingIds).slice(0, 20).map((productId) => fetchXapiProductDetail(productId).catch(() => null)));
+}
+
+function syncCartFromBasketPayload(payload = {}) {
+  const basket = payload && typeof payload === "object" ? payload : null;
+  const entries = basketLineEntries(basket);
 
   const nextCart = {};
   entries.forEach((line) => {
@@ -2959,6 +3020,8 @@ function syncCartFromBasketPayload(payload = {}) {
 
   state.cart = nextCart;
   state.cartSummary = basket?.bill && typeof basket.bill === "object" ? basket.bill : null;
+  state.cartLoaded = true;
+  state.cartLoadError = "";
 }
 
 function syncCartSummary(payload = null) {
@@ -2967,6 +3030,70 @@ function syncCartSummary(payload = null) {
     return;
   }
   state.cartSummary = null;
+}
+
+function clearStorefrontCartState({ loaded = false } = {}) {
+  state.cart = {};
+  state.cartSummary = null;
+  state.cartLoaded = loaded;
+  state.cartLoading = false;
+  state.cartLoadError = "";
+  state.cartUpdatingKeys.clear();
+  saveCart();
+  renderCart();
+}
+
+async function hydrateStorefrontCart(force = false) {
+  if (!state.sessionAuthenticated) {
+    clearStorefrontCartState({ loaded: true });
+    return false;
+  }
+  if (state.cartLoading) {
+    while (state.cartLoading) {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    }
+    return state.cartLoaded && !state.cartLoadError;
+  }
+  if (state.cartLoaded && !force) return true;
+
+  state.cartLoading = true;
+  state.cartLoadError = "";
+  renderCart();
+
+  try {
+    const response = await fetch("/api/storefront/basket", {
+      headers: { Accept: "application/json" },
+    });
+    const result = await response.json().catch(() => ({}));
+    const basket = extractStorefrontBasketResponse(result);
+    const bill = extractStorefrontBillResponse(result);
+    const hasError = !response.ok || hasStorefrontBasketError(result, response.status) || result?.ok === false;
+    const errorMessage = extractStorefrontErrorMessage(result, response.status);
+    const authErrorHint = /please log|login first|not authorized|unauthor|token|authorization|session/i.test(errorMessage);
+
+    if (hasError) {
+      if (response.status === 401 || response.status === 403 || authErrorHint) {
+        clearStorefrontSessionState();
+        updateAccountButton();
+      }
+      state.cartLoadError = errorMessage;
+      state.cartLoaded = false;
+      return false;
+    }
+
+    await ensureBasketProductsAvailable(basket || {});
+    syncCartFromBasketPayload(basket || { items: [] });
+    syncCartSummary(bill);
+    saveCart();
+    return true;
+  } catch {
+    state.cartLoadError = "Could not load your Selldone bag.";
+    state.cartLoaded = false;
+    return false;
+  } finally {
+    state.cartLoading = false;
+    renderCart();
+  }
 }
 
 function extractStorefrontBasketResponse(payload = {}) {
@@ -3040,6 +3167,65 @@ function isLikelyStorefrontErrorMessage(message = "") {
 
 function hasStorefrontBasketError(payload = {}, status = 0) {
   return hasStorefrontBasketErrorValue(payload, status, new WeakSet());
+}
+
+function isStorefrontCartAuthError(status = 0, message = "") {
+  return status === 401 || status === 403 || /please log|login first|not authorized|unauthor|token|authorization|session/i.test(message);
+}
+
+function storefrontCartRequestBody(item, selectedVariantId, count) {
+  const body = {
+    count: Math.max(0, Number.parseInt(count, 10) || 0),
+    currency: firstNonNull(item?.currency, "$"),
+  };
+  if (selectedVariantId) {
+    body.variant_id = selectedVariantId;
+  }
+  return body;
+}
+
+async function requestStorefrontCartMutation(productId, requestBody = {}, method = "PUT") {
+  try {
+    const response = await fetch(`/api/storefront/basket/${encodeURIComponent(String(productId))}`, {
+      method,
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    const result = await response.json().catch(() => ({}));
+    const basket = extractStorefrontBasketResponse(result);
+    const bill = extractStorefrontBillResponse(result);
+    const hasError = !response.ok || hasStorefrontBasketError(result, response.status) || result?.ok === false;
+    const errorMessage = extractStorefrontErrorMessage(result, response.status);
+
+    if (hasError) {
+      if (isStorefrontCartAuthError(response.status, errorMessage)) {
+        clearStorefrontSessionState();
+        updateAccountButton();
+      }
+      return { ok: false, status: response.status, error: errorMessage, result };
+    }
+
+    return { ok: true, status: response.status, result, basket, bill };
+  } catch {
+    return { ok: false, status: 0, error: "Failed to update Selldone cart. Please try again." };
+  }
+}
+
+async function applyStorefrontCartMutation(mutation) {
+  if (!mutation?.ok) return false;
+  if (mutation.basket) {
+    await ensureBasketProductsAvailable(mutation.basket);
+    syncCartFromBasketPayload(mutation.basket);
+    syncCartSummary(mutation.bill);
+    saveCart();
+    renderCart();
+    return true;
+  }
+  return hydrateStorefrontCart(true);
 }
 
 function firstStorefrontErrorMessage(payload = {}, status = 0, visited = new WeakSet()) {
@@ -3188,10 +3374,10 @@ function cartTotalsSummary(entries = []) {
   const localSubtotal = entries.reduce((sum, entry) => sum + entry.linePrice * entry.qty, 0);
   const localCurrency = firstNonNull(entries[0]?.item?.currency, "$");
   const summary = state.cartSummary && typeof state.cartSummary === "object" ? state.cartSummary : null;
-  const summarySubtotal = summary ? pickNumeric(summary, ["subtotal", "sub_total", "items_total", "total_items", "itemsCost"], localSubtotal) : localSubtotal;
-  const summaryTotal = summary ? pickNumeric(summary, ["total", "final_total", "grand_total", "payable"], NaN) : NaN;
+  const summarySubtotal = summary ? pickNumeric(summary, ["subtotal", "sub_total", "items_total", "total_items", "itemsCost", "products_price", "items_price", "basket_price"], localSubtotal) : localSubtotal;
+  const summaryTotal = summary ? pickNumeric(summary, ["total", "final_total", "grand_total", "payable", "amount", "pay_amount", "payment_amount", "to_pay"], NaN) : NaN;
   const currency = firstNonNull(summary?.currency, summary?.currency_code, localCurrency);
-  const shipping = summary ? pickNumeric(summary, ["shipping", "shipping_cost", "delivery_cost", "delivery", "shipping_price"], NaN) : NaN;
+  const shipping = summary ? pickNumeric(summary, ["shipping", "shipping_cost", "delivery_cost", "delivery", "shipping_price", "transportation_price"], NaN) : NaN;
   return {
     subtotal: summarySubtotal,
     total: summaryTotal,
@@ -3290,122 +3476,189 @@ async function addToCartAsync(productId, variantKey = "") {
     }
   }
 
-  const requestBody = {
-    count: 1,
-    currency: firstNonNull(item.currency, "$"),
-  };
-
-  if (selectedVariantId) {
-    requestBody.variant_id = selectedVariantId;
+  if (!state.cartLoaded) {
+    const loaded = await hydrateStorefrontCart(true);
+    if (!loaded) {
+      showToast(state.cartLoadError || "Could not load your Selldone bag before updating it.");
+      return;
+    }
   }
 
-  try {
-    const response = await fetch(`/api/storefront/basket/${encodeURIComponent(String(item.id))}`, {
-      method: "PUT",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(requestBody),
-    });
+  const nextCount = Math.max(1, toNumber(state.cart[lineKey], 0) + 1);
+  const requestBody = storefrontCartRequestBody(item, selectedVariantId, nextCount);
+  state.cartUpdatingKeys.add(lineKey);
+  renderCart();
 
-    const result = await response.json().catch(() => ({}));
-    const basket = extractStorefrontBasketResponse(result);
-    const bill = extractStorefrontBillResponse(result);
-    const hasError = !response.ok || hasStorefrontBasketError(result, response.status) || result?.ok === false;
-    const errorMessage = extractStorefrontErrorMessage(result, response.status);
-    const authErrorHint = /please log|login first|not authorized|unauthor|token|authorization|session/i.test(errorMessage);
+  const mutation = await requestStorefrontCartMutation(item.id, requestBody, "PUT");
+  state.cartUpdatingKeys.delete(lineKey);
 
-    if (hasError) {
-      if (response.status === 401 || response.status === 403 || authErrorHint) {
-        clearStorefrontSessionState();
-        updateAccountButton();
-      }
-      showToast(errorMessage);
-      return;
-    }
-
-    if (!basket) {
-      showToast("Selldone did not return basket details.");
-      return;
-    }
-
-    syncCartFromBasketPayload(basket);
-    syncCartSummary(bill);
-
-    if (selected) {
-      setActiveProductVariantSelection(item.id, selected);
-    }
-
-    saveCart();
+  if (!mutation.ok) {
     renderCart();
-    openCart();
-    showToast("Added to bag");
+    showToast(mutation.error || "Could not add item to Selldone cart.");
     return;
-  } catch {
-    showToast("Failed to add to cart. Please try again.");
   }
+
+  const synced = await applyStorefrontCartMutation(mutation);
+  if (!synced) {
+    renderCart();
+    showToast(state.cartLoadError || "Selldone did not return basket details.");
+    return;
+  }
+
+  if (selected) {
+    setActiveProductVariantSelection(item.id, selected);
+  }
+
+  openCart();
+  showToast("Added to bag");
+}
+
+async function setCartQuantity(lineKey, quantity) {
+  const key = String(lineKey || "").trim();
+  if (!key) return;
+  if (state.cartUpdatingKeys.has(key)) return;
+
+  if (!state.sessionAuthenticated) {
+    await fetchSessionStatus(true);
+    if (!state.sessionAuthenticated) {
+      showToast("Please log in before updating your bag.");
+      return;
+    }
+  }
+
+  const nextCount = Math.max(0, Math.min(99, Number.parseInt(quantity, 10) || 0));
+  const { productId, variantKey } = parseCartLineKey(key);
+  let item = getProductById(productId);
+  if (!item && state.dataSource === DATA_SOURCE.xapi) {
+    item = await fetchXapiProductDetail(productId);
+  }
+  if (!item) {
+    showToast("Product is not available.");
+    return;
+  }
+
+  const resolvedVariant = await resolveCartLineVariantForStorefront(item, variantKey);
+  item = resolvedVariant.item || item;
+  const selected = resolvedVariant.selected;
+  const selectedVariantId = resolvedVariant.variantId;
+  const itemVariants = getItemVariants(item);
+  if (selected && !selectedVariantId && itemVariants.length) {
+    showToast("This selected variant is not valid anymore. Please reselect an option.");
+    return;
+  }
+
+  const requestBody = storefrontCartRequestBody(item, selectedVariantId, nextCount);
+  state.cartUpdatingKeys.add(key);
+  renderCart();
+
+  const mutation = await requestStorefrontCartMutation(item.id, requestBody, nextCount > 0 ? "PUT" : "DELETE");
+  state.cartUpdatingKeys.delete(key);
+
+  if (!mutation.ok) {
+    renderCart();
+    showToast(mutation.error || "Could not update your Selldone bag.");
+    return;
+  }
+
+  const synced = await applyStorefrontCartMutation(mutation);
+  if (!synced) {
+    renderCart();
+    showToast(state.cartLoadError || "Could not refresh your Selldone bag.");
+    return;
+  }
+
+  showToast(nextCount > 0 ? "Bag updated" : "Removed from bag");
 }
 
 function updateQuantity(lineKey, delta) {
   const key = String(lineKey || "").trim();
   if (!key) return;
-  state.cart[key] = Math.max(0, (state.cart[key] || 0) + delta);
-  if (state.cart[key] === 0) delete state.cart[key];
-  state.cartSummary = null;
-  saveCart();
-  renderCart();
+  const current = toNumber(state.cart[key], 0);
+  return setCartQuantity(key, current + Number(delta || 0));
 }
 
 function renderCart() {
   const entries = cartEntries();
   const count = entries.reduce((sum, entry) => sum + entry.qty, 0);
   const totals = cartTotalsSummary(entries);
+  const currency = totals.currency || "$";
+  const hasShipping = Number.isFinite(totals.shipping);
+  const displayTotal = Number.isFinite(totals.total) ? totals.total : totals.subtotal + (hasShipping ? totals.shipping : 0);
+  const isMutating = state.cartUpdatingKeys.size > 0;
+  const statusMarkup = [
+    state.cartLoading ? `<p class="cart-status" role="status">Syncing your Selldone bag...</p>` : "",
+    state.cartLoadError ? `<p class="cart-status cart-status--error" role="alert">${escapeHtml(state.cartLoadError)}</p>` : "",
+  ].join("");
+
   els.cartCount.textContent = String(count);
-  els.cartTitle.textContent = `${count} ${count === 1 ? "item" : "items"}`;
-  els.cartSubtotal.textContent = formatPrice(totals.subtotal, totals.currency || "$");
-  els.cartItems.innerHTML = entries.length
+  els.cartTitle.textContent = state.cartLoading && !state.cartLoaded ? "Syncing bag" : `${count} ${count === 1 ? "item" : "items"}`;
+  els.cartSubtotal.textContent = formatPrice(totals.subtotal, currency);
+  if (els.cartShipping) els.cartShipping.textContent = hasShipping ? formatPrice(totals.shipping, currency) : "Calculated at checkout";
+  if (els.cartShippingRow) els.cartShippingRow.hidden = !hasShipping;
+  if (els.cartTotal) els.cartTotal.textContent = formatPrice(displayTotal, currency);
+  if (els.cartSummaryNote) {
+    els.cartSummaryNote.textContent = state.cartLoading
+      ? "Checking live prices and availability."
+      : totals.hasSummary
+        ? "Totals are synced from Selldone."
+        : state.sessionAuthenticated
+          ? "Totals will update after Selldone sync."
+          : "Log in to sync your Selldone bag.";
+  }
+  if (els.cartCheckoutButton) {
+    els.cartCheckoutButton.disabled = !entries.length || state.cartLoading || isMutating;
+  }
+
+  const itemsMarkup = entries.length
     ? entries
-        .map(
-          ({ lineKey, item, qty, variant, linePrice }) => `
-          <article class="cart-item">
-            <div class="cart-item-media">${
-              (() => {
-                const activeMedia = firstNonNull(
-                  variant?.image,
-                  variant?.icon,
-                  variant?.path,
-                  variant?.url,
-                  variant?.filename,
-                  variant?.photo,
-                  item.image,
-                  item.images?.[0],
-                );
-                return renderProductImage(item, "thumbnail-sprite", activeMedia);
-              })()
-            }</div>
-            <div>
-              <h3>${escapeHtml(item.title)}</h3>
-              <p>${escapeHtml(item.brand)}</p>
-              ${variant ? `<span class="product-meta">${escapeHtml(variantLabel(variant, variant.__index || 0))}</span>` : ""}
-              <strong>${formatPrice(linePrice, item.currency)}</strong>
-            </div>
-            <div class="qty-stepper">
-              <button type="button" data-cart-key="${escapeHtml(lineKey)}" data-delta="-1" aria-label="Decrease quantity">-</button>
-              <span>${qty}</span>
-              <button type="button" data-cart-key="${escapeHtml(lineKey)}" data-delta="1" aria-label="Increase quantity">+</button>
-            </div>
-          </article>
-        `,
-        )
+        .map(({ lineKey, item, qty, variant, linePrice }) => {
+          const isUpdating = state.cartUpdatingKeys.has(lineKey);
+          const disabled = isUpdating || state.cartLoading ? "disabled" : "";
+          const activeMedia = firstNonNull(
+            variant?.image,
+            variant?.icon,
+            variant?.path,
+            variant?.url,
+            variant?.filename,
+            variant?.photo,
+            item.image,
+            item.images?.[0],
+          );
+          return `
+            <article class="cart-item ${isUpdating ? "is-updating" : ""}">
+              <div class="cart-item-media">${renderProductImage(item, "thumbnail-sprite", activeMedia)}</div>
+              <div class="cart-item-copy">
+                <h3>${escapeHtml(item.title)}</h3>
+                <p>${escapeHtml(item.brand)}</p>
+                ${variant ? `<span class="product-meta">${escapeHtml(variantLabel(variant, variant.__index || 0))}</span>` : ""}
+                <div class="cart-item-prices">
+                  <strong>${formatPrice(linePrice, item.currency)}</strong>
+                  <span>${formatPrice(linePrice * qty, item.currency)} line total</span>
+                </div>
+                <button class="cart-remove" type="button" data-cart-remove-key="${escapeHtml(lineKey)}" ${disabled}>Remove</button>
+              </div>
+              <div class="qty-stepper" aria-label="Quantity controls">
+                <button type="button" data-cart-key="${escapeHtml(lineKey)}" data-delta="-1" aria-label="Decrease quantity" ${disabled}>-</button>
+                <input class="qty-input" type="number" min="1" max="99" inputmode="numeric" value="${qty}" data-cart-quantity="${escapeHtml(lineKey)}" aria-label="Quantity for ${escapeHtml(item.title)}" ${disabled} />
+                <button type="button" data-cart-key="${escapeHtml(lineKey)}" data-delta="1" aria-label="Increase quantity" ${disabled}>+</button>
+                ${isUpdating ? `<span class="cart-item-sync">Syncing</span>` : ""}
+              </div>
+            </article>
+          `;
+        })
         .join("")
-    : `<p class="cart-empty">Your bag is ready for something beautiful.</p>`;
+    : `<p class="cart-empty">${state.cartLoading ? "Loading your bag..." : "Your bag is ready for something beautiful."}</p>`;
+
+  els.cartItems.innerHTML = `${statusMarkup}${itemsMarkup}`;
 }
 
 function openCart() {
   els.cartDrawer.classList.add("is-open");
   els.cartDrawer.setAttribute("aria-hidden", "false");
   document.body.classList.add("cart-open");
+  if (state.sessionAuthenticated && !state.cartLoaded && !state.cartLoading) {
+    void hydrateStorefrontCart();
+  }
 }
 
 function closeCart() {
@@ -3512,6 +3765,7 @@ export {
   renderShopPage,
   route,
   setActiveProductVariantSelection,
+  setCartQuantity,
   setHash,
   setHeroSlide,
   shadeName,

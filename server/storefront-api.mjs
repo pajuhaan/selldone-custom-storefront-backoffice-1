@@ -2,6 +2,8 @@ import { STOREFRONT_SHOP_HANDLE, STOREFRONT_XAPI_BASE } from "./config.mjs";
 import { readJsonBody, sendJson } from "./http.mjs";
 import { ensureAccessToken } from "./auth.mjs";
 
+const STOREFRONT_PHYSICAL_BASKET_TYPE = "physical";
+
 function firstArray(...values) {
   return values.find((value) => Array.isArray(value)) || [];
 }
@@ -13,6 +15,12 @@ function firstNonNull(...values) {
 export async function handleStorefrontApi(req, res, url, storefrontSession = null) {
   if (url.pathname === "/api/storefront/products" && req.method === "GET") {
     const result = await fetchStorefrontProducts(url);
+    sendJson(res, result.ok ? 200 : result.status || 502, result);
+    return true;
+  }
+
+  if (url.pathname === "/api/storefront/basket" && req.method === "GET") {
+    const result = await fetchStorefrontBasket(storefrontSession, url);
     sendJson(res, result.ok ? 200 : result.status || 502, result);
     return true;
   }
@@ -204,6 +212,240 @@ async function removeFromStorefrontBasket(session, productId, payload = {}) {
     payload: payloadResponse,
     endpoint: publicStorefrontEndpoint(endpoint, "DELETE"),
   };
+}
+
+async function fetchStorefrontBasket(session, url) {
+  const token = await ensureStorefrontToken(session);
+  if (!token) {
+    return { ok: false, status: 401, error: "Authentication required" };
+  }
+
+  const shopInfo = await fetchStorefrontShopInfoWithBaskets(token);
+  if (!shopInfo.ok) {
+    return {
+      ok: false,
+      source: "storefront_basket",
+      status: shopInfo.status,
+      error: shopInfo.error || "Unable to load Selldone basket.",
+      endpoint: shopInfo.endpoint,
+      details: shopInfo.payload,
+    };
+  }
+
+  const physicalBasket = extractPhysicalBasketFromShopInfo(shopInfo.payload);
+  const billResult = await fetchStorefrontBasketBill(token, STOREFRONT_PHYSICAL_BASKET_TYPE);
+  const bill = billResult.ok ? extractStorefrontBillPayload(billResult.payload) || billResult.payload?.bill || null : null;
+
+  return {
+    ok: true,
+    source: "storefront_basket",
+    status: 200,
+    type: STOREFRONT_PHYSICAL_BASKET_TYPE,
+    endpoint: shopInfo.endpoint,
+    basket: physicalBasket || { type: STOREFRONT_PHYSICAL_BASKET_TYPE, items: [], basket_items: [] },
+    bill,
+    shop: firstNonNull(shopInfo.payload?.shop, shopInfo.payload?.data?.shop, shopInfo.payload?.result?.shop, null),
+  };
+}
+
+async function fetchStorefrontShopInfoWithBaskets(token) {
+  const endpoint = new URL(`${STOREFRONT_XAPI_BASE}/shops/@${STOREFRONT_SHOP_HANDLE}/info`);
+  return requestStorefrontBasketEndpoint(token, endpoint, STOREFRONT_PHYSICAL_BASKET_TYPE, "shop-info");
+}
+
+async function fetchStorefrontBasketBill(token, type) {
+  const endpoint = new URL(`${STOREFRONT_XAPI_BASE}/shops/@${STOREFRONT_SHOP_HANDLE}/basket/${encodeURIComponent(type)}/bill`);
+  return requestStorefrontBasketEndpoint(token, endpoint, type, "bill");
+}
+
+async function requestStorefrontBasketEndpoint(token, endpoint, type, label) {
+  try {
+    const response = await fetch(endpoint, {
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+        "X-Requested-With": "XMLHttpRequest",
+      },
+    });
+    const payload = await readStorefrontResponsePayload(response);
+    const storefrontError = detectStorefrontApiError(payload, response.status);
+    if (!response.ok || storefrontError) {
+      return {
+        ok: false,
+        type,
+        label,
+        status: storefrontError?.status || response.status,
+        error: storefrontError?.error || readStorefrontApiMessage(payload) || `${response.statusText || `Selldone storefront ${label} request failed.`} (${response.status}).`,
+        payload,
+        endpoint: publicStorefrontEndpoint(endpoint),
+      };
+    }
+
+    return {
+      ok: true,
+      type,
+      label,
+      status: response.status,
+      payload,
+      endpoint: publicStorefrontEndpoint(endpoint),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      type,
+      label,
+      status: 502,
+      error: error.message || `Selldone storefront ${type} ${label} request failed.`,
+      endpoint: publicStorefrontEndpoint(endpoint),
+    };
+  }
+}
+
+function extractStorefrontBasketPayload(payload = {}) {
+  if (!payload || typeof payload !== "object") return null;
+  return firstNonNull(
+    payload?.basket,
+    payload?.data?.basket,
+    payload?.response?.basket,
+    payload?.result?.basket,
+    payload?.cart,
+    payload?.data?.cart,
+    payload?.response?.cart,
+    payload?.result?.cart,
+    payload?.payload?.basket,
+    payload?.payload?.cart,
+    Array.isArray(payload?.items) || Array.isArray(payload?.lines) || Array.isArray(payload?.basket_items) ? payload : null,
+  );
+}
+
+function extractStorefrontBasketsPayload(payload = {}) {
+  return firstArray(
+    payload?.baskets,
+    payload?.data?.baskets,
+    payload?.result?.baskets,
+    payload?.payload?.baskets,
+    payload?.shop?.baskets,
+    payload?.data?.shop?.baskets,
+    payload?.result?.shop?.baskets,
+  );
+}
+
+function extractPhysicalBasketFromShopInfo(payload = {}) {
+  const baskets = extractStorefrontBasketsPayload(payload);
+  const physical = baskets.find((basket) => String(basket?.type || basket?.product_type || "").trim().toLowerCase() === STOREFRONT_PHYSICAL_BASKET_TYPE);
+  if (!physical) return null;
+  const items = firstArray(physical?.items, physical?.lines, physical?.basket_items, physical?.data?.items, physical?.result?.items);
+  return {
+    ...physical,
+    type: STOREFRONT_PHYSICAL_BASKET_TYPE,
+    items,
+    basket_items: items,
+  };
+}
+
+function extractStorefrontBillPayload(payload = {}) {
+  if (!payload || typeof payload !== "object") return null;
+  return firstNonNull(
+    payload?.bill,
+    payload?.data?.bill,
+    payload?.response?.bill,
+    payload?.result?.bill,
+    payload?.summary,
+    payload?.data?.summary,
+    payload?.response?.summary,
+    payload?.result?.summary,
+    payload?.payload?.bill,
+    null,
+  );
+}
+
+function combineStorefrontBasketResponses(results = []) {
+  const items = [];
+  const baskets = {};
+  const bills = {};
+
+  for (const result of results) {
+    const basket = extractStorefrontBasketPayload(result.payload);
+    const bill = extractStorefrontBillPayload(result.payload);
+    if (basket && typeof basket === "object") {
+      baskets[result.type] = basket;
+      const basketItems = firstArray(basket?.items, basket?.lines, basket?.basket_items, basket?.data?.items, basket?.result?.items);
+      basketItems.forEach((item) => {
+        if (item && typeof item === "object") {
+          items.push({ ...item, basket_type: item.basket_type || item.type || result.type });
+        }
+      });
+    }
+    if (bill && typeof bill === "object") {
+      bills[result.type] = bill;
+    }
+  }
+
+  const bill = aggregateStorefrontBills(bills);
+  return {
+    ok: true,
+    source: "storefront_basket",
+    status: 200,
+    types: results.map((result) => result.type),
+    endpoint: {
+      method: "GET",
+      url: `${STOREFRONT_XAPI_BASE}/shops/@${STOREFRONT_SHOP_HANDLE}/basket/{type}/bill`,
+    },
+    basket: {
+      items,
+      basket_items: items,
+      baskets,
+    },
+    bill,
+    baskets,
+    bills,
+  };
+}
+
+function aggregateStorefrontBills(bills = {}) {
+  const billEntries = Object.entries(bills).filter(([, bill]) => bill && typeof bill === "object");
+  const summary = {
+    baskets: bills,
+  };
+  const currency = firstNonNull(...billEntries.map(([, bill]) => firstNonNull(bill.currency, bill.currency_code, bill.currencyCode)));
+  if (currency) summary.currency = currency;
+
+  const subtotal = sumBillValues(billEntries, ["subtotal", "sub_total", "items_total", "total_items", "itemsCost", "products_price", "items_price"]);
+  if (subtotal !== null) {
+    summary.subtotal = subtotal;
+    summary.sub_total = subtotal;
+  }
+
+  const total = sumBillValues(billEntries, ["total", "final_total", "grand_total", "payable", "amount", "pay_amount", "payment_amount", "to_pay"]);
+  if (total !== null) {
+    summary.total = total;
+    summary.final_total = total;
+  }
+
+  const shipping = sumBillValues(billEntries, ["shipping", "shipping_cost", "delivery_cost", "delivery", "shipping_price"]);
+  if (shipping !== null) {
+    summary.shipping = shipping;
+  }
+
+  summary.can_pay = billEntries.length ? billEntries.every(([, bill]) => bill.can_pay !== false) : false;
+  summary.can_cod = billEntries.some(([, bill]) => bill.can_cod === true);
+  return summary;
+}
+
+function sumBillValues(billEntries = [], keys = []) {
+  let total = 0;
+  let found = false;
+  for (const [, bill] of billEntries) {
+    for (const key of keys) {
+      const value = Number(bill?.[key]);
+      if (Number.isFinite(value)) {
+        total += value;
+        found = true;
+        break;
+      }
+    }
+  }
+  return found ? total : null;
 }
 
 async function ensureStorefrontToken(session) {
