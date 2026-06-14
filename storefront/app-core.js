@@ -3113,11 +3113,11 @@ function hasStorefrontBasketErrorValue(payload = {}, status = 0, visited = new W
   if (visited.has(payload)) return false;
   visited.add(payload);
 
+  if (payload?.ok === false || payload?.success === false || payload?.valid === false || payload?.error === true) {
+    return true;
+  }
+
   const directFlags = [
-    payload?.ok,
-    payload?.success,
-    payload?.valid,
-    payload?.error,
     payload?.error_msg,
     payload?.error_message,
     payload?.error_description,
@@ -3127,7 +3127,11 @@ function hasStorefrontBasketErrorValue(payload = {}, status = 0, visited = new W
   ];
 
   for (const flag of directFlags) {
-    if (flag === false) return true;
+    if (flag === null || flag === undefined || flag === false) continue;
+    if (typeof flag === "boolean") {
+      if (flag) return true;
+      continue;
+    }
     if (typeof flag === "string" && flag.trim()) return isLikelyStorefrontErrorMessage(flag);
     if (Array.isArray(flag)) {
       const hasErrorEntry = flag.some((entry) => {

@@ -414,6 +414,10 @@ function readStorefrontApiMessage(payload, visited = new WeakSet()) {
     }
 
     if (candidate == null) continue;
+    if (typeof candidate === "boolean") {
+      if (candidate) return "Request failed";
+      continue;
+    }
     if (typeof candidate === "object") {
       const nested = readStorefrontApiMessage(candidate, visited);
       if (nested) return nested;
@@ -475,11 +479,15 @@ function detectStorefrontApiError(payload, status = 0, visited = new WeakSet()) 
 
   const rawStatus = Number.isFinite(Number(status)) && Number(status) > 0 ? Number(status) : 502;
   const responseStatus = rawStatus >= 400 ? rawStatus : 409;
+
+  if (payload.ok === false || payload.success === false || payload.valid === false || payload.error === true) {
+    return {
+      status: responseStatus,
+      error: readStorefrontApiMessage(payload) || `Selldone storefront request failed (${responseStatus}).`,
+    };
+  }
+
   const directFlags = [
-    payload.ok,
-    payload.success,
-    payload.valid,
-    payload?.error,
     payload?.error_msg,
     payload?.error_message,
     payload?.error_description,
@@ -489,32 +497,45 @@ function detectStorefrontApiError(payload, status = 0, visited = new WeakSet()) 
   ];
 
   for (const flag of directFlags) {
-    if (flag === false) {
-      return {
-        status: responseStatus,
-        error: readStorefrontApiMessage(payload) || `Selldone storefront request failed (${responseStatus}).`,
-      };
+    if (flag === null || flag === undefined || flag === false) continue;
+    if (typeof flag === "boolean") {
+      if (flag) {
+        return {
+          status: responseStatus,
+          error: readStorefrontApiMessage(payload) || `Selldone storefront request failed (${responseStatus}).`,
+        };
+      }
+      continue;
     }
-    if (typeof flag === "string" && flag.trim() && isLikelyStorefrontErrorMessage(flag)) {
-      return {
-        status: responseStatus,
-        error: flag.trim(),
-      };
+    if (typeof flag === "string") {
+      const text = flag.trim();
+      if (text && isLikelyStorefrontErrorMessage(text)) {
+        return {
+          status: responseStatus,
+          error: text,
+        };
+      }
+      continue;
     }
     if (Array.isArray(flag)) {
       if (!flag.length) continue;
-      const details = flag
-        .map((entry) => {
-          if (typeof entry === "string") return entry;
-          if (entry && typeof entry === "object") return readStorefrontApiMessage(entry, visited);
-          return String(entry || "");
-        })
-        .filter(Boolean)
-        .join(", ");
-      return {
-        status: responseStatus,
-        error: details || `Selldone storefront request failed (${responseStatus}).`,
-      };
+      const messages = [];
+      for (const entry of flag) {
+        if (typeof entry === "string") {
+          const text = entry.trim();
+          if (text && isLikelyStorefrontErrorMessage(text)) messages.push(text);
+        } else if (entry && typeof entry === "object") {
+          const nested = detectStorefrontApiError(entry, status, visited);
+          if (nested) return nested;
+        }
+      }
+      if (messages.length) {
+        return {
+          status: responseStatus,
+          error: messages.join(", "),
+        };
+      }
+      continue;
     }
     if (flag && typeof flag === "object") {
       const nested = detectStorefrontApiError(flag, status, visited);
