@@ -1,4 +1,4 @@
-import * as storefront from "./app-core.js?v=storefront-cart-image-20260614b";
+import * as storefront from "./app-core.js?v=storefront-cart-links-20260614";
 
 const {
   state,

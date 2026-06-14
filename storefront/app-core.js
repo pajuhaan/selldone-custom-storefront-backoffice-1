@@ -2207,11 +2207,14 @@ function checkoutLineItem(entry) {
   const variantText = selectedVariant ? variantLabel(selectedVariant, selectedVariant.__index || 0) : "";
   const linePrice = formatPrice(entry.linePrice, entry.item.currency);
   const totalPrice = formatPrice(entry.linePrice * entry.qty, entry.item.currency);
+  const productHref = `#product/${encodeURIComponent(String(entry.item.id))}`;
   return `
     <article class="checkout-line-item">
-      <div class="checkout-line-media">${renderProductImage(entry.item, "thumbnail-sprite", entry.item.image)}</div>
+      <a class="checkout-line-media checkout-line-link" href="${productHref}" aria-label="${escapeHtml(entry.item.title)}">
+        ${renderProductImage(entry.item, "thumbnail-sprite", entry.item.image)}
+      </a>
       <div>
-        <h4>${escapeHtml(entry.item.title)}</h4>
+        <h4><a class="checkout-title-link" href="${productHref}">${escapeHtml(entry.item.title)}</a></h4>
         ${variantText ? `<p class="product-meta">${escapeHtml(variantText)}</p>` : ""}
         <p class="product-meta">x${entry.qty}</p>
       </div>

@@ -2096,6 +2096,18 @@ img.large-sprite {
   aspect-ratio: 1;
   border-radius: 4px;
   background: var(--soft);
+  overflow: hidden;
+}
+
+.checkout-line-link,
+.checkout-title-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.checkout-line-link:hover,
+.checkout-title-link:hover {
+  text-decoration: underline;
 }
 
 .checkout-line-item h4 {
