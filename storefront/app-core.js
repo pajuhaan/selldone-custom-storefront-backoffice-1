@@ -134,6 +134,10 @@ const els = {
   cartSubtotal: document.querySelector("[data-cart-subtotal]"),
   cartShipping: document.querySelector("[data-cart-shipping]"),
   cartShippingRow: document.querySelector("[data-cart-shipping-row]"),
+  cartDiscount: document.querySelector("[data-cart-discount]"),
+  cartDiscountRow: document.querySelector("[data-cart-discount-row]"),
+  cartTax: document.querySelector("[data-cart-tax]"),
+  cartTaxRow: document.querySelector("[data-cart-tax-row]"),
   cartTotal: document.querySelector("[data-cart-total]"),
   cartSummaryNote: document.querySelector("[data-cart-summary-note]"),
   searchInput: document.querySelector("[data-site-search]"),
@@ -2619,10 +2623,21 @@ async function renderCheckoutPage() {
   const currency = formatOrderCurrency(entries);
   const cartTotals = cartTotalsSummary(entries);
   const subtotal = Number.isFinite(cartTotals.subtotal) ? cartTotals.subtotal : formatOrderLineTotal(entries);
-  const shippingCost = Number.isFinite(cartTotals.shipping) ? cartTotals.shipping : calculateTransportCost(selectedTransport, subtotal);
+  const hasQuotedBillShipping = Number.isFinite(cartTotals.shipping) && cartTotals.shipping >= 0;
+  const shippingCost = hasQuotedBillShipping ? cartTotals.shipping : calculateTransportCost(selectedTransport, subtotal);
   const shippingLabel = selectedTransport ? transportDescription(selectedTransport) : "Delivery";
-  const total = Number.isFinite(cartTotals.total) ? cartTotals.total : subtotal + shippingCost;
+  const discountAmount = Number.isFinite(cartTotals.discounts) ? cartTotals.discounts : 0;
+  const taxAmount = Number.isFinite(cartTotals.tax) ? cartTotals.tax : 0;
+  const payableShipping = Number.isFinite(shippingCost) && shippingCost > 0 ? shippingCost : 0;
+  const total = Number.isFinite(cartTotals.total) ? cartTotals.total : Math.max(0, subtotal - discountAmount + taxAmount + payableShipping);
   const cartCurrency = cartTotals.currency || currency;
+  const displayCurrency = cartCurrency || currency;
+  const shippingText = Number.isFinite(shippingCost)
+    ? `${formatPrice(Math.max(0, shippingCost), displayCurrency)} (${escapeHtml(shippingLabel)})`
+    : `Calculated after address (${escapeHtml(shippingLabel)})`;
+  const discountText = `-${formatPrice(discountAmount, displayCurrency)}`;
+  const taxLabel = cartTotals.taxIncluded ? "Tax (included)" : "Tax";
+  const taxText = formatPrice(Math.max(0, taxAmount), displayCurrency);
   const bill = state.cartSummary && typeof state.cartSummary === "object" ? state.cartSummary : {};
   const canPay = bill?.can_pay !== false;
   const billMessages = checkoutBillMessages(bill);
@@ -2718,11 +2733,11 @@ async function renderCheckoutPage() {
               ${entries.map((entry) => checkoutLineItem(entry)).join("")}
             </div>
             <div class="checkout-summary-total">
-              <div><span>Subtotal</span><strong>${formatPrice(subtotal, cartCurrency || currency)}</strong></div>
-              <div><span>Shipping</span><strong>${formatPrice(shippingCost, currency)} (${escapeHtml(shippingLabel)})</strong></div>
-              ${Number.isFinite(pickNumeric(bill, ["items_discount", "discount_code", "coupon", "club", "offer"], NaN)) ? `<div><span>Discounts</span><strong>${formatPrice(pickNumeric(bill, ["items_discount", "discount_code", "coupon", "club", "offer"], 0), cartCurrency || currency)}</strong></div>` : ""}
-              ${Number.isFinite(pickNumeric(bill, ["tax"], NaN)) ? `<div><span>Tax</span><strong>${formatPrice(pickNumeric(bill, ["tax"], 0), cartCurrency || currency)}</strong></div>` : ""}
-              <div class="checkout-summary-total-final"><span>Total</span><strong>${formatPrice(total, cartCurrency || currency)}</strong></div>
+              <div><span>Subtotal</span><strong>${formatPrice(subtotal, displayCurrency)}</strong></div>
+              <div><span>Shipping</span><strong>${shippingText}</strong></div>
+              ${discountAmount > 0 ? `<div><span>Discounts</span><strong>${discountText}</strong></div>` : ""}
+              ${Number.isFinite(cartTotals.tax) ? `<div><span>${taxLabel}</span><strong>${taxText}</strong></div>` : ""}
+              <div class="checkout-summary-total-final"><span>Total</span><strong>${formatPrice(total, displayCurrency)}</strong></div>
             </div>
           </aside>
         </div>
@@ -2760,9 +2775,14 @@ async function handleCheckoutSubmit(event) {
   state.activeCheckoutShippingKey = selectedShippingKey;
   const cartTotals = cartTotalsSummary(entries);
   const subtotal = Number.isFinite(cartTotals.subtotal) ? cartTotals.subtotal : formatOrderLineTotal(entries);
-  const shippingCost = Number.isFinite(cartTotals.shipping) ? cartTotals.shipping : calculateTransportCost(selectedTransport, subtotal);
+  const hasQuotedBillShipping = Number.isFinite(cartTotals.shipping) && cartTotals.shipping >= 0;
+  const shippingCost = hasQuotedBillShipping ? cartTotals.shipping : calculateTransportCost(selectedTransport, subtotal);
+  const discountAmount = Number.isFinite(cartTotals.discounts) ? cartTotals.discounts : 0;
+  const taxAmount = Number.isFinite(cartTotals.tax) ? cartTotals.tax : 0;
+  const taxShippingAmount = Number.isFinite(cartTotals.taxShipping) ? cartTotals.taxShipping : 0;
+  const payableShipping = Number.isFinite(shippingCost) && shippingCost > 0 ? shippingCost : 0;
   const currency = cartTotals.currency || formatOrderCurrency(entries);
-  const total = Number.isFinite(cartTotals.total) ? cartTotals.total : subtotal + shippingCost;
+  const total = Number.isFinite(cartTotals.total) ? cartTotals.total : Math.max(0, subtotal - discountAmount + taxAmount + payableShipping);
   const formData = Object.fromEntries(new FormData(form));
   const gatewayCode = String(formData.gatewayCode || state.checkoutGatewayCode || "auto").trim();
 
@@ -2818,7 +2838,11 @@ async function handleCheckoutSubmit(event) {
     amount_check: Number(total.toFixed(2)),
     totals: {
       subtotal: Number(subtotal.toFixed(2)),
-      shipping: Number(shippingCost.toFixed(2)),
+      shipping: Number((Number.isFinite(shippingCost) ? shippingCost : 0).toFixed(2)),
+      discounts: Number(discountAmount.toFixed(2)),
+      tax: Number(taxAmount.toFixed(2)),
+      tax_shipping: Number(taxShippingAmount.toFixed(2)),
+      tax_included: Boolean(cartTotals.taxIncluded),
       total: Number(total.toFixed(2)),
       currency,
     },
@@ -3778,6 +3802,14 @@ function hasStorefrontBasketErrorValue(payload = {}, status = 0, visited = new W
   return false;
 }
 
+function sumNumericFields(source, candidates = []) {
+  const values = candidates
+    .map((key) => pickNumeric(source, [key], NaN))
+    .filter((value) => Number.isFinite(value));
+  if (!values.length) return NaN;
+  return values.reduce((sum, value) => sum + value, 0);
+}
+
 function cartTotalsSummary(entries = []) {
   const localSubtotal = entries.reduce((sum, entry) => sum + entry.linePrice * entry.qty, 0);
   const localCurrency = firstNonNull(entries[0]?.item?.currency, "$");
@@ -3786,11 +3818,29 @@ function cartTotalsSummary(entries = []) {
   const summaryTotal = summary ? pickNumeric(summary, ["sum", "total", "final_total", "grand_total", "payable", "amount", "pay_amount", "payment_amount", "to_pay", "price"], NaN) : NaN;
   const currency = firstNonNull(summary?.currency, summary?.currency_code, localCurrency);
   const shipping = summary ? pickNumeric(summary, ["delivery_price", "shipping", "shipping_cost", "delivery_cost", "delivery", "shipping_price", "transportation_price"], NaN) : NaN;
+  const aggregateDiscount = summary ? pickNumeric(summary, ["total_discount", "discount_total", "discounts_total", "basket_discount", "discount"], NaN) : NaN;
+  const componentDiscount = summary ? sumNumericFields(summary, ["items_discount", "products_discount", "cross_selling_discount", "offer", "offer_discount", "discount_code", "coupon", "coupon_discount", "club", "club_discount", "lottery", "lottery_discount"]) : NaN;
+  const discounts = Number.isFinite(aggregateDiscount) ? Math.abs(aggregateDiscount) : Number.isFinite(componentDiscount) ? Math.abs(componentDiscount) : 0;
+  const productTax = summary ? pickNumeric(summary, ["tax", "vat", "value_added_tax"], NaN) : NaN;
+  const taxShipping = summary ? pickNumeric(summary, ["tax_shipping", "shipping_tax", "delivery_tax"], NaN) : NaN;
+  const aggregateTax = summary ? pickNumeric(summary, ["tax_total", "total_tax", "taxes"], NaN) : NaN;
+  const componentTax = sumNumericFields({ productTax, taxShipping }, ["productTax", "taxShipping"]);
+  const tax = Number.isFinite(aggregateTax) ? aggregateTax : componentTax;
+  const taxIncluded = Boolean(summary && ["tax_included", "taxIncluded", "included_tax", "vat_included"].some((key) => {
+    const value = summary[key];
+    return value === true || value === 1 || String(value || "").toLowerCase() === "true";
+  }));
+  const effectiveShipping = Number.isFinite(shipping) && shipping > 0 ? shipping : 0;
+  const fallbackTotal = Math.max(0, summarySubtotal - discounts + (Number.isFinite(tax) ? tax : 0) + effectiveShipping);
   return {
     subtotal: summarySubtotal,
-    total: summaryTotal,
+    total: Number.isFinite(summaryTotal) ? summaryTotal : fallbackTotal,
     currency,
     shipping,
+    discounts,
+    tax: Number.isFinite(tax) ? Math.max(0, tax) : NaN,
+    taxShipping: Number.isFinite(taxShipping) ? Math.max(0, taxShipping) : 0,
+    taxIncluded,
     hasSummary: Boolean(summary),
   };
 }
@@ -3991,7 +4041,14 @@ function renderCart() {
   const totals = cartTotalsSummary(entries);
   const currency = totals.currency || "$";
   const hasShipping = Number.isFinite(totals.shipping);
-  const displayTotal = Number.isFinite(totals.total) ? totals.total : totals.subtotal + (hasShipping ? totals.shipping : 0);
+  const hasDiscount = Number.isFinite(totals.discounts) && totals.discounts > 0;
+  const hasTax = Number.isFinite(totals.tax);
+  const displayTotal = Number.isFinite(totals.total) ? totals.total : totals.subtotal;
+  const shippingText = hasShipping
+    ? totals.shipping >= 0
+      ? formatPrice(totals.shipping, currency)
+      : "Calculated after address"
+    : "Calculated at checkout";
   const isMutating = state.cartUpdatingKeys.size > 0;
   const statusMarkup = [
     state.cartLoading ? `<p class="cart-status" role="status">Syncing your Selldone bag...</p>` : "",
@@ -4001,8 +4058,12 @@ function renderCart() {
   els.cartCount.textContent = String(count);
   els.cartTitle.textContent = state.cartLoading && !state.cartLoaded ? "Syncing bag" : `${count} ${count === 1 ? "item" : "items"}`;
   els.cartSubtotal.textContent = formatPrice(totals.subtotal, currency);
-  if (els.cartShipping) els.cartShipping.textContent = hasShipping ? formatPrice(totals.shipping, currency) : "Calculated at checkout";
+  if (els.cartShipping) els.cartShipping.textContent = shippingText;
   if (els.cartShippingRow) els.cartShippingRow.hidden = !hasShipping;
+  if (els.cartDiscount) els.cartDiscount.textContent = `-${formatPrice(totals.discounts, currency)}`;
+  if (els.cartDiscountRow) els.cartDiscountRow.hidden = !hasDiscount;
+  if (els.cartTax) els.cartTax.textContent = `${formatPrice(Math.max(0, totals.tax), currency)}${totals.taxIncluded ? " included" : ""}`;
+  if (els.cartTaxRow) els.cartTaxRow.hidden = !hasTax;
   if (els.cartTotal) els.cartTotal.textContent = formatPrice(displayTotal, currency);
   if (els.cartSummaryNote) {
     els.cartSummaryNote.textContent = state.cartLoading

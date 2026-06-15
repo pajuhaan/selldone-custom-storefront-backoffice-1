@@ -25,9 +25,9 @@
     <meta content="true" name="storage-redirect" />
     <meta content="https://cdn.selldone.com" name="storage-redirect-host" />
     <meta content="true" name="storage-redirect-thumbnails" />
-    <link rel="stylesheet" href="styles.css?v=storefront-product-pros-20260615" />
+    <link rel="stylesheet" href="styles.css?v=storefront-cart-tax-20260615" />
     <script defer src="https://cdn.jsdelivr.net/npm/@selldone/sdk-storefront@1/dist/bundle.min.js"></script>
-    <script type="module" src="app.js?v=storefront-product-pros-20260615"></script>
+    <script type="module" src="app.js?v=storefront-cart-tax-20260615"></script>
   </head>
   <body>
     <header class="site-header">
@@ -165,6 +165,8 @@
         <div class="cart-summary">
           <div><span>Subtotal</span><strong data-cart-subtotal>$0.00</strong></div>
           <div data-cart-shipping-row hidden><span>Shipping</span><strong data-cart-shipping>$0.00</strong></div>
+          <div data-cart-discount-row hidden><span>Discounts</span><strong data-cart-discount>-$0.00</strong></div>
+          <div data-cart-tax-row hidden><span>Tax</span><strong data-cart-tax>$0.00</strong></div>
           <div class="cart-total-row"><span>Estimated total</span><strong data-cart-total>$0.00</strong></div>
           <p data-cart-summary-note>Log in to sync your Selldone bag.</p>
           <button type="button" data-cart-checkout>Checkout</button>
