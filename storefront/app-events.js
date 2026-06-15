@@ -1,4 +1,4 @@
-import * as storefront from "./app-core.js?v=storefront-account-menu-20260615b";
+import * as storefront from "./app-core.js?v=storefront-product-pros-20260615";
 
 const {
   state,

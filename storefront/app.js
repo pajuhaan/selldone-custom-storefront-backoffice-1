@@ -1,3 +1,3 @@
-import { registerStorefrontInteractions } from "./app-events.js?v=storefront-account-menu-20260615b";
+import { registerStorefrontInteractions } from "./app-events.js?v=storefront-product-pros-20260615";
 
 registerStorefrontInteractions();

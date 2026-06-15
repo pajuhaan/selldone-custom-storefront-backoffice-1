@@ -419,6 +419,139 @@ function extractImages(rawProduct) {
   return Array.from(new Set(collected));
 }
 
+function productProsSeed(product = {}) {
+  const source = `${product?.id || ""}|${product?.title || ""}|${product?.category || ""}|${product?.subcategory || ""}`;
+  let hash = 0;
+  for (let index = 0; index < source.length; index += 1) {
+    hash = (hash * 31 + source.charCodeAt(index)) >>> 0;
+  }
+  return hash || 1;
+}
+
+function pickProsText(list = [], seed = 1, offset = 0) {
+  if (!Array.isArray(list) || !list.length) return "";
+  return list[(seed + offset) % list.length];
+}
+
+function normalizeProductPros(rawPros, product = {}) {
+  const labels = ["Summary", "Details", "How To Use", "Ingredients", "Shipping & Coupon Restrictions"];
+  if (Array.isArray(rawPros)) {
+    const normalized = rawPros
+      .map((entry, index) => {
+        if (typeof entry === "string") {
+          const [maybeTitle, ...rest] = entry.split(":");
+          const body = rest.join(":").trim();
+          return {
+            title: body ? maybeTitle.trim() : labels[index] || `Note ${index + 1}`,
+            body: body || entry.trim(),
+          };
+        }
+        if (entry && typeof entry === "object") {
+          return {
+            title: String(firstNonNull(entry.title, entry.name, entry.key, labels[index] || `Note ${index + 1}`)).trim(),
+            body: String(firstNonNull(entry.body, entry.text, entry.description, entry.value, entry.content, "")).trim(),
+          };
+        }
+        return null;
+      })
+      .filter((entry) => entry?.title && entry?.body);
+    if (normalized.length) return normalized;
+  }
+
+  if (rawPros && typeof rawPros === "object") {
+    const normalized = Object.entries(rawPros)
+      .map(([title, body]) => ({
+        title: titleCase(title),
+        body: String(body || "").trim(),
+      }))
+      .filter((entry) => entry.title && entry.body);
+    if (normalized.length) return normalized;
+  }
+
+  if (typeof rawPros === "string" && rawPros.trim()) {
+    return [{ title: "Details", body: rawPros.trim() }];
+  }
+
+  return generateProductPros(product);
+}
+
+function generateProductPros(product = {}) {
+  const seed = productProsSeed(product);
+  const title = String(product.title || "This product").trim();
+  const category = titleCase(firstNonNull(product.subcategory, product.category, "beauty"));
+  const categoryLower = String(firstNonNull(product.subcategory, product.category, "")).toLowerCase();
+  const finish = pickProsText(["fresh", "polished", "soft-focus", "clean", "everyday", "radiant"], seed, 1);
+  const texture = pickProsText(["lightweight", "silky", "comforting", "smooth", "blendable", "layer-friendly"], seed, 2);
+  const mood = pickProsText(["morning routine", "daily touch-up", "weekend edit", "gift-ready ritual", "minimal routine", "glow routine"], seed, 3);
+  const productFamily = categoryLower.includes("skin")
+    ? "skin care"
+    : categoryLower.includes("lip")
+      ? "lip color"
+      : categoryLower.includes("foundation")
+        ? "complexion"
+        : categoryLower.includes("sun")
+          ? "sun care"
+          : categoryLower.includes("fragrance")
+            ? "fragrance"
+            : "beauty";
+
+  return [
+    {
+      title: "Summary",
+      body: `${title} is a ${finish} ${productFamily} pick made for a ${mood}, with a ${texture} feel and a finish that stays easy to wear.`,
+    },
+    {
+      title: "Details",
+      body: `${category} performance with a curated Pajulina feel: balanced payoff, clean presentation, and packaging suited for daily use or gifting.`,
+    },
+    {
+      title: "How To Use",
+      body: pickProsText(
+        [
+          "Apply a small amount first, then build gradually until the finish looks even and comfortable.",
+          "Use after your base routine and layer only where you want extra polish or glow.",
+          "Start at the center of the face or target area, blend outward, and reapply as needed during the day.",
+          "Use clean fingertips, a brush, or a sponge depending on the finish you prefer.",
+        ],
+        seed,
+        4,
+      ),
+    },
+    {
+      title: "Ingredients",
+      body: pickProsText(
+        [
+          "Ingredient lists may vary by batch. Check the product packaging for the most current formula before use.",
+          "Made for a comfortable beauty routine. Review the package label if you have sensitivities or ingredient restrictions.",
+          "Formula details can change over time. Always confirm ingredients on the item label before applying.",
+          "Designed for daily cosmetic use. Patch test when trying a new product or shade for the first time.",
+        ],
+        seed,
+        5,
+      ),
+    },
+    {
+      title: "Shipping & Coupon Restrictions",
+      body: pickProsText(
+        [
+          "Ships as a physical Pajulina item. Standard shipping, pickup, and eligible promotions apply unless the cart says otherwise.",
+          "Available for physical delivery. Some coupons, bundles, or regional shipping methods may be limited at checkout.",
+          "Eligible for standard storefront checkout. Final delivery cost and promotion availability are confirmed by Selldone in the cart.",
+          "Packed for safe delivery. Shipping options, COD, and discounts are calculated live before payment.",
+        ],
+        seed,
+        6,
+      ),
+    },
+  ];
+}
+
+function renderProductProsAccordion(item = {}, description = "") {
+  const pros = normalizeProductPros(item.pros, { ...item, description });
+  const withSummary = pros.length ? pros : generateProductPros(item);
+  return withSummary.map((entry, index) => accordionItem(entry.title, entry.body, index === 0)).join("");
+}
+
 function mapProduct(raw) {
   if (!raw || typeof raw !== "object") return null;
 
@@ -501,6 +634,14 @@ function mapProduct(raw) {
       raw.summary,
       "A polished daily essential designed for fresh color, smooth wear, and an easy beauty routine.",
     ),
+    pros: normalizeProductPros(firstNonNull(raw.pros, raw.product_pros, raw.productPros, raw.features, null), {
+      id: String(productId),
+      title,
+      category: categoryValue,
+      subcategory: subcategoryValue,
+      brand,
+      description: firstNonNull(raw.description, raw.summary, ""),
+    }),
     rate: raw.rate,
     categories: Array.isArray(raw.categories) ? raw.categories : [],
     productVariants: catalogVariants.length ? catalogVariants : Array.isArray(raw.productVariants) ? raw.productVariants : [],
@@ -2086,11 +2227,7 @@ async function renderProductPage(productId) {
           </div>
 
           <div class="accordion">
-            ${accordionItem("Summary", description, true)}
-            ${accordionItem("Details", "Buildable color, comfortable wear, and a smooth finish made for everyday routines. Size and finish vary by product.")}
-            ${accordionItem("How To Use", "Apply as desired. Layer lightly for a soft finish or build for more impact.")}
-            ${accordionItem("Ingredients", "Ingredient lists may vary. Please check product packaging for the most current information.")}
-            ${accordionItem("Shipping & Coupon Restrictions", "Available for standard shipping, pickup, and selected offers unless marked otherwise.")}
+            ${renderProductProsAccordion(item, description)}
           </div>
 
           <section class="bought-box">
