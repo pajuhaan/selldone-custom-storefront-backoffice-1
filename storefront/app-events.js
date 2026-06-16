@@ -1,4 +1,4 @@
-import * as storefront from "./app-core.js?v=storefront-blog-mcp-20260616";
+import * as storefront from "./app-core.js?v=storefront-category-menu-20260616";
 
 const {
   state,
@@ -7,6 +7,7 @@ const {
   cartEntries,
   closeAccountMenu,
   closeCart,
+  closeCategoryMenu,
   closeMobileMenu,
   fetchSessionStatus,
   firstNonNull,
@@ -15,6 +16,7 @@ const {
   handleCheckoutSubmit,
   navigateToAccount,
   openCart,
+  openCategoryMenu,
   parseHash,
   renderCart,
   renderCheckoutPage,
@@ -39,6 +41,31 @@ export function registerStorefrontInteractions() {
     const accountControl = event.target.closest("[data-account-control]");
     if (!accountControl && state.accountMenuOpen) {
       closeAccountMenu();
+    }
+
+    const categoryMenuOpen = event.target.closest("[data-category-menu-open]");
+    if (categoryMenuOpen) {
+      event.preventDefault();
+      openCategoryMenu();
+      return;
+    }
+
+    const categoryMenuClose = event.target.closest("[data-category-menu-close]");
+    if (categoryMenuClose) {
+      event.preventDefault();
+      closeCategoryMenu();
+      return;
+    }
+
+    const categoryMenuLink = event.target.closest("[data-category-menu-link]");
+    if (categoryMenuLink) {
+      closeCategoryMenu();
+      closeMobileMenu();
+      return;
+    }
+
+    if (state.categoryMenuOpen && !event.target.closest("[data-category-menu]")) {
+      closeCategoryMenu();
     }
 
     const heroStep = event.target.closest("[data-hero-step]");
@@ -300,6 +327,7 @@ export function registerStorefrontInteractions() {
   window.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       closeCart();
+      closeCategoryMenu();
       closeMobileMenu();
       closeAccountMenu();
     }

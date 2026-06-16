@@ -112,6 +112,7 @@ const state = {
   sessionLoginUrl: "/auth/storefront/start",
   sessionUser: {},
   accountMenuOpen: false,
+  categoryMenuOpen: false,
   checkoutSubmitting: false,
   cartLoaded: false,
   cartLoading: false,
@@ -152,6 +153,8 @@ const els = {
   accountButton: document.querySelector("[data-account-button]"),
   accountControl: document.querySelector("[data-account-control]"),
   accountMenu: document.querySelector("[data-account-menu]"),
+  categoryMenu: document.querySelector("[data-category-menu]"),
+  categoryMenuList: document.querySelector("[data-category-menu-list]"),
   cartCheckoutButton: document.querySelector("[data-cart-checkout]"),
 };
 
@@ -1940,6 +1943,60 @@ function closeAccountMenu() {
 
 function toggleAccountMenu() {
   setAccountMenuOpen(!state.accountMenuOpen);
+}
+
+function categoryMenuHref(key) {
+  const normalized = String(key || "").trim();
+  if (!normalized || normalized === "all") return "#shop";
+  return `#shop?category=${encodeURIComponent(normalized)}`;
+}
+
+function categoryProductCount(key) {
+  const normalized = asSafeCategory(key);
+  if (!normalized || normalized === "all") return productTotal();
+  return getProductsForUi().filter((item) => asSafeCategory(item.category) === normalized).length;
+}
+
+function renderCategoryMenuItem(key, label, image) {
+  const normalized = String(key || "all").trim() || "all";
+  const count = categoryProductCount(normalized);
+  return `
+    <a class="category-menu-item" href="${categoryMenuHref(normalized)}" data-category-menu-link>
+      <span class="category-menu-media">
+        ${normalized === "all" ? renderSprite(0, "category-menu-sprite") : renderCategoryMedia(image)}
+      </span>
+      <span class="category-menu-copy">
+        <strong>${escapeHtml(label || titleCase(normalized))}</strong>
+        <small>${count} ${count === 1 ? "item" : "items"}</small>
+      </span>
+      <span class="category-menu-arrow" aria-hidden="true">›</span>
+    </a>
+  `;
+}
+
+function renderCategoryMenu() {
+  if (!els.categoryMenuList) return;
+  const categories = [["all", "All products", 0], ...getCategoryCards()];
+  els.categoryMenuList.innerHTML = categories.length
+    ? categories.map(([key, label, image]) => renderCategoryMenuItem(key, label, image)).join("")
+    : `<p class="category-menu-empty">Categories are loading from Selldone.</p>`;
+}
+
+function setCategoryMenuOpen(open) {
+  const nextState = Boolean(open);
+  state.categoryMenuOpen = nextState;
+  if (nextState) renderCategoryMenu();
+  document.body.classList.toggle("category-menu-open", nextState);
+  els.categoryMenu?.classList.toggle("is-open", nextState);
+  els.categoryMenu?.setAttribute("aria-hidden", String(!nextState));
+}
+
+function openCategoryMenu() {
+  setCategoryMenuOpen(true);
+}
+
+function closeCategoryMenu() {
+  setCategoryMenuOpen(false);
 }
 
 function getCheckoutTransportations() {
@@ -4642,6 +4699,7 @@ export {
   cartEntries,
   closeAccountMenu,
   closeCart,
+  closeCategoryMenu,
   closeMobileMenu,
   fetchSessionStatus,
   firstNonNull,
@@ -4650,6 +4708,7 @@ export {
   handleCheckoutSubmit,
   navigateToAccount,
   openCart,
+  openCategoryMenu,
   parseHash,
   renderCart,
   renderCheckoutPage,
