@@ -113,6 +113,8 @@ const state = {
   sessionUser: {},
   accountMenuOpen: false,
   categoryMenuOpen: false,
+  pageLoading: false,
+  pageLoadingCount: 0,
   checkoutSubmitting: false,
   cartLoaded: false,
   cartLoading: false,
@@ -155,8 +157,44 @@ const els = {
   accountMenu: document.querySelector("[data-account-menu]"),
   categoryMenu: document.querySelector("[data-category-menu]"),
   categoryMenuList: document.querySelector("[data-category-menu-list]"),
+  pageLoading: document.querySelector("[data-page-loading]"),
   cartCheckoutButton: document.querySelector("[data-cart-checkout]"),
 };
+
+function setPageLoading(active) {
+  state.pageLoadingCount = Math.max(0, state.pageLoadingCount + (active ? 1 : -1));
+  state.pageLoading = state.pageLoadingCount > 0;
+  els.pageLoading?.classList.toggle("is-active", state.pageLoading);
+  els.pageLoading?.setAttribute("aria-hidden", String(!state.pageLoading));
+}
+
+function shouldTrackFetch(input) {
+  const rawUrl = typeof input === "string" ? input : input?.url;
+  if (!rawUrl) return false;
+  try {
+    const url = new URL(rawUrl, window.location.origin);
+    return url.origin === window.location.origin && url.pathname.startsWith("/api/");
+  } catch {
+    return String(rawUrl).startsWith("/api/");
+  }
+}
+
+function installPageLoadingFetchTracker() {
+  if (window.__pajulinaPageLoadingFetchTracker) return;
+  const nativeFetch = window.fetch.bind(window);
+  window.__pajulinaPageLoadingFetchTracker = true;
+  window.fetch = async (...args) => {
+    const tracked = shouldTrackFetch(args[0]);
+    if (tracked) setPageLoading(true);
+    try {
+      return await nativeFetch(...args);
+    } finally {
+      if (tracked) setPageLoading(false);
+    }
+  };
+}
+
+installPageLoadingFetchTracker();
 
 function spritePosition(index) {
   const col = index % SPRITE_COLUMNS;
@@ -2076,47 +2114,52 @@ function setHash(route, params = {}) {
 }
 
 async function route() {
-  await bootstrapProducts();
-  if (state.isLoading) return;
-  await fetchSessionStatus();
-  if (state.sessionAuthenticated) {
-    await hydrateStorefrontCart();
-  }
-  updateAccountButton();
-  closeAccountMenu();
+  setPageLoading(true);
+  try {
+    await bootstrapProducts();
+    if (state.isLoading) return;
+    await fetchSessionStatus();
+    if (state.sessionAuthenticated) {
+      await hydrateStorefrontCart();
+    }
+    updateAccountButton();
+    closeAccountMenu();
 
-  const { route: routeName, id, query } = parseHash();
-  syncRouteSearch(query);
-  sanitizeActiveCategory();
+    const { route: routeName, id, query } = parseHash();
+    syncRouteSearch(query);
+    sanitizeActiveCategory();
 
-  if (routeName === "shop") {
-    state.activeProductId = null;
-    state.activeProductGallery = [];
-    renderShopPage();
-  } else if (routeName === "product") {
-    const productId = String(id || state.activeProductId || "").trim();
-    if (!productId) {
+    if (routeName === "shop") {
       state.activeProductId = null;
       state.activeProductGallery = [];
-      setHash("shop");
-      return;
+      renderShopPage();
+    } else if (routeName === "product") {
+      const productId = String(id || state.activeProductId || "").trim();
+      if (!productId) {
+        state.activeProductId = null;
+        state.activeProductGallery = [];
+        setHash("shop");
+        return;
+      }
+      await renderProductPage(productId);
+    } else if (routeName === "checkout") {
+      await renderCheckoutPage();
+    } else if (routeName === "blog" || routeName === "blogs") {
+      await renderBlogPage(id, query);
+    } else if (routeName === "account") {
+      await renderAccountProfilePage(id);
+    } else {
+      state.activeProductId = null;
+      state.activeProductGallery = [];
+      await ensureBlogsLoaded();
+      renderHomePage();
     }
-    await renderProductPage(productId);
-  } else if (routeName === "checkout") {
-    await renderCheckoutPage();
-  } else if (routeName === "blog" || routeName === "blogs") {
-    await renderBlogPage(id, query);
-  } else if (routeName === "account") {
-    await renderAccountProfilePage(id);
-  } else {
-    state.activeProductId = null;
-    state.activeProductGallery = [];
-    await ensureBlogsLoaded();
-    renderHomePage();
-  }
 
-  updateNav(routeName);
-  window.scrollTo({ top: 0, behavior: "auto" });
+    updateNav(routeName);
+    window.scrollTo({ top: 0, behavior: "auto" });
+  } finally {
+    setPageLoading(false);
+  }
 }
 
 function updateNav(routeName) {
