@@ -115,6 +115,13 @@ export async function handleStorefrontApi(req, res, url, storefrontSession = nul
     return true;
   }
 
+  const profileType = storefrontProfileTypeFromApiPath(pathname);
+  if (profileType && req.method === "GET") {
+    const result = await fetchStorefrontProfile(profileType);
+    sendJson(res, result.ok ? 200 : result.status || 502, result);
+    return true;
+  }
+
   const productId = storefrontProductIdFromApiPath(pathname);
   if (productId && req.method === "GET") {
     const result = await fetchStorefrontProduct(productId);
@@ -950,6 +957,81 @@ async function fetchStorefrontShopInfo() {
   return requestStorefrontXapi(endpoint, "shop-info");
 }
 
+async function fetchStorefrontProfile(type) {
+  const endpoint = new URL(`${STOREFRONT_XAPI_BASE}/shops/@${STOREFRONT_SHOP_HANDLE}/profiles/${encodeURIComponent(type)}`);
+  try {
+    const response = await fetch(endpoint, {
+      headers: {
+        Accept: "application/json",
+        "X-Requested-With": "XMLHttpRequest",
+      },
+    });
+    const payload = await readStorefrontResponsePayload(response);
+    const storefrontError = detectStorefrontApiError(payload, response.status);
+
+    if (!response.ok || storefrontError) {
+      return {
+        ok: false,
+        source: "storefront_xapi",
+        status: storefrontError?.status || response.status,
+        endpoint: publicStorefrontEndpoint(endpoint),
+        error: storefrontError?.error || readStorefrontApiMessage(payload) || `${response.statusText || "Selldone storefront profile request failed"} (${response.status}).`,
+        payload,
+      };
+    }
+
+    const profile = firstNonNull(payload?.profile, payload?.data?.profile, payload?.result?.profile, payload?.payload?.profile, payload?.data, payload?.result, payload?.payload, payload);
+    return {
+      ok: true,
+      source: "storefront_xapi",
+      apiBaseUrl: STOREFRONT_XAPI_BASE,
+      endpoint: publicStorefrontEndpoint(endpoint),
+      type,
+      profile,
+      body: firstNonNull(profile?.body, profile?.content, payload?.body, payload?.data?.body, payload?.result?.body, payload?.payload?.body, ""),
+      payload,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      source: "storefront_xapi",
+      status: 502,
+      endpoint: publicStorefrontEndpoint(endpoint),
+      error: error?.message || "Selldone storefront profile request failed.",
+    };
+  }
+}
+
+function normalizeStorefrontShopInfoPayload(payload) {
+  const shop = firstNonNull(
+    payload?.shop,
+    payload?.data?.shop,
+    payload?.result?.shop,
+    payload?.payload?.shop,
+    payload?.data,
+    payload?.result,
+    payload?.payload,
+    null,
+  );
+  const profile = firstNonNull(
+    shop?.profile,
+    shop?.shop_profile,
+    shop?.info,
+    shop?.profile_data,
+    payload?.profile,
+    payload?.data?.profile,
+    payload?.result?.profile,
+    payload?.payload?.profile,
+    null,
+  );
+
+  return {
+    shop,
+    profile,
+    shopInfo: payload,
+  };
+}
+
 async function requestStorefrontXapi(endpoint, label) {
   try {
     const response = await fetch(endpoint, {
@@ -976,6 +1058,7 @@ async function requestStorefrontXapi(endpoint, label) {
       source: "storefront_xapi",
       apiBaseUrl: STOREFRONT_XAPI_BASE,
       endpoint: publicStorefrontEndpoint(endpoint),
+      ...(label === "shop-info" ? normalizeStorefrontShopInfoPayload(payload) : {}),
       products: firstArray(
         payload?.products,
         payload?.data?.products,
@@ -1155,6 +1238,13 @@ function storefrontBlogIdFromApiPath(pathname) {
 function storefrontBasketProductIdFromApiPath(pathname) {
   const match = pathname.match(/^\/api\/storefront\/basket\/([^/]+)$/);
   return match ? decodeURIComponent(match[1]) : null;
+}
+
+function storefrontProfileTypeFromApiPath(pathname) {
+  const match = String(pathname || "").match(/^\/api\/storefront\/profiles\/([^/]+)$/);
+  if (!match) return null;
+  const type = decodeURIComponent(match[1]);
+  return ["privacy", "terms", "about-us", "contact-us"].includes(type) ? type : null;
 }
 
 function clampInteger(value, min, max, fallback) {
