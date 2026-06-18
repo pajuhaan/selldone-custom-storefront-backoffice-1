@@ -110,4 +110,5 @@ This project is a custom Selldone storefront plus backoffice dashboard. Follow t
 - The worktree may contain user changes. Do not revert unrelated files.
 - Use focused patches and avoid broad refactors unless needed for the request.
 - Do not commit `.env`, tokens, secrets, or generated local runtime files.
+- When adding a new source file, immediately add it to git with an explicit `git add <path>` so it is not missed in the next push.
 - If a new rule, Selldone API behavior, image conversion case, or UI convention is discovered and applied, update this `AGENT.md` in the same change.
