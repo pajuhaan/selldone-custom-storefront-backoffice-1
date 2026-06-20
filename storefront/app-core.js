@@ -1,6 +1,6 @@
 import { selldoneImagePathToUrl } from "/dashboard/features/selldone-images.js?v=storefront-cart-image-20260614b";
-import { renderOrderHistoryPage } from "./order-history.js?v=storefront-orders-payments-20260620";
-import { createStorefrontPayments } from "./payments.js?v=storefront-orders-payments-20260620";
+import { renderOrderHistoryPage } from "./order-history.js?v=storefront-orders-products-20260620";
+import { createStorefrontPayments } from "./payments.js?v=storefront-orders-products-20260620";
 
 const SPRITE_COLUMNS = 4;
 const SPRITE_ROWS = 4;

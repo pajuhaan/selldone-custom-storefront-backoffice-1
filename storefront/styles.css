@@ -3435,3 +3435,626 @@ img.large-sprite {
     justify-self: flex-start;
   }
 }
+
+.account-orders-hero {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 18px;
+  padding: clamp(20px, 4vw, 32px);
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at 8% 12%, rgba(220, 177, 103, 0.34), transparent 34%),
+    linear-gradient(135deg, rgba(255, 250, 239, 0.98), rgba(240, 247, 220, 0.86));
+  border: 1px solid rgba(74, 58, 35, 0.1);
+  box-shadow: 0 24px 60px rgba(66, 48, 28, 0.1);
+}
+
+.account-orders-hero h1 {
+  margin: 6px 0 10px;
+  font-size: clamp(2rem, 5vw, 4.1rem);
+  line-height: 0.95;
+}
+
+.account-orders-hero p {
+  max-width: 560px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 1.02rem;
+  line-height: 1.65;
+}
+
+.account-orders-stats {
+  display: grid;
+  min-width: min(320px, 100%);
+  gap: 10px;
+}
+
+.account-orders-stats span {
+  display: grid;
+  gap: 5px;
+  padding: 16px 18px;
+  border: 1px solid rgba(24, 22, 18, 0.08);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(12px);
+}
+
+.account-orders-stats small,
+.account-order-meta small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.account-orders-stats strong {
+  color: var(--ink);
+  font-size: 1.25rem;
+}
+
+.account-order-card {
+  position: relative;
+  overflow: hidden;
+  gap: 18px;
+  padding: clamp(18px, 3vw, 26px);
+  border: 1px solid rgba(43, 37, 27, 0.1);
+  border-radius: 28px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 250, 241, 0.9)),
+    radial-gradient(circle at 100% 0%, rgba(141, 170, 75, 0.18), transparent 32%);
+}
+
+.account-order-card::after {
+  content: "";
+  position: absolute;
+  inset: auto 18px 0 18px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(24, 22, 18, 0.12), transparent);
+}
+
+.account-order-card-ribbon {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 7px;
+  background: linear-gradient(180deg, #8daa4b, #d8b051);
+}
+
+.account-order-card--danger .account-order-card-ribbon {
+  background: linear-gradient(180deg, #b35b44, #e5a07a);
+}
+
+.account-order-card--warning .account-order-card-ribbon {
+  background: linear-gradient(180deg, #d8a23a, #efe08f);
+}
+
+.account-order-card--neutral .account-order-card-ribbon {
+  background: linear-gradient(180deg, #8b8374, #d5cab6);
+}
+
+.account-order-title-block {
+  display: grid;
+  gap: 4px;
+}
+
+.account-order-title-block h2 {
+  margin: 0;
+}
+
+.account-order-eyebrow {
+  color: #7b8e34;
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.account-order-date {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.94rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.account-order-status {
+  border: 1px solid transparent;
+}
+
+.account-order-status--success {
+  background: rgba(141, 170, 75, 0.16);
+  border-color: rgba(141, 170, 75, 0.28);
+  color: #4f671f;
+}
+
+.account-order-status--warning {
+  background: rgba(216, 162, 58, 0.16);
+  border-color: rgba(216, 162, 58, 0.28);
+  color: #805313;
+}
+
+.account-order-status--danger {
+  background: rgba(179, 91, 68, 0.14);
+  border-color: rgba(179, 91, 68, 0.25);
+  color: #923d29;
+}
+
+.account-order-status--neutral {
+  background: rgba(24, 22, 18, 0.07);
+  border-color: rgba(24, 22, 18, 0.1);
+  color: var(--ink);
+}
+
+.account-order-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.account-order-meta span {
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+  border: 1px solid rgba(24, 22, 18, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.account-order-meta strong {
+  color: var(--ink);
+  font-size: 1.05rem;
+}
+
+.account-order-items-wrap {
+  padding: 14px 16px 4px;
+  border-radius: 20px;
+  background: rgba(247, 242, 231, 0.72);
+}
+
+.account-order-items-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+  color: var(--ink);
+  font-weight: 900;
+}
+
+.account-order-items-head strong {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.account-order-items li {
+  border-top-color: rgba(24, 22, 18, 0.07);
+}
+
+.account-order-items-empty {
+  padding: 14px 16px;
+  border: 1px dashed rgba(24, 22, 18, 0.18);
+  border-radius: 18px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.account-order-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+@media (max-width: 760px) {
+  .account-orders-hero,
+  .account-order-card-head,
+  .account-order-footer {
+    display: grid;
+  }
+
+  .account-order-meta {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Apple-like compact order history */
+.account-profile-panel:has(.account-orders-hero) {
+  background: linear-gradient(180deg, rgba(250, 250, 252, 0.92), rgba(245, 245, 247, 0.86));
+  border-color: rgba(0, 0, 0, 0.06);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.08);
+}
+
+.account-orders-hero {
+  background:
+    radial-gradient(circle at 18% 12%, rgba(255, 255, 255, 0.96), transparent 32%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.92), rgba(245, 245, 247, 0.86));
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 34px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 24px 70px rgba(0, 0, 0, 0.08);
+}
+
+.account-orders-hero h1 {
+  color: #1d1d1f;
+  font-weight: 900;
+  letter-spacing: -0.055em;
+}
+
+.account-orders-hero p,
+.account-order-date,
+.account-order-footer {
+  color: #6e6e73;
+}
+
+.account-orders-stats span,
+.account-order-card {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(0, 0, 0, 0.055);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 18px 50px rgba(0, 0, 0, 0.07);
+  backdrop-filter: blur(18px);
+}
+
+.account-order-card {
+  padding: clamp(16px, 2.5vw, 22px);
+  border-radius: 30px;
+}
+
+.account-order-card-ribbon,
+.account-order-card::after {
+  display: none;
+}
+
+.account-order-eyebrow {
+  color: #0071e3;
+}
+
+.account-order-card-head h2,
+.account-order-title-block h2 {
+  color: #1d1d1f;
+  font-weight: 850;
+  letter-spacing: -0.035em;
+}
+
+.account-order-status {
+  min-height: 30px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  letter-spacing: -0.01em;
+}
+
+.account-order-status--success {
+  background: rgba(52, 199, 89, 0.13);
+  border-color: rgba(52, 199, 89, 0.2);
+  color: #248a3d;
+}
+
+.account-order-status--warning {
+  background: rgba(255, 159, 10, 0.13);
+  border-color: rgba(255, 159, 10, 0.2);
+  color: #9a5b00;
+}
+
+.account-order-status--danger {
+  background: rgba(255, 59, 48, 0.12);
+  border-color: rgba(255, 59, 48, 0.2);
+  color: #c22d23;
+}
+
+.account-order-status--neutral {
+  background: rgba(142, 142, 147, 0.13);
+  border-color: rgba(142, 142, 147, 0.18);
+  color: #424245;
+}
+
+.account-order-meta {
+  gap: 8px;
+}
+
+.account-order-meta span {
+  gap: 2px;
+  padding: 11px 12px;
+  border-radius: 18px;
+  background: #f5f5f7;
+  border-color: rgba(0, 0, 0, 0.04);
+}
+
+.account-order-meta strong {
+  color: #1d1d1f;
+  font-size: 1rem;
+  letter-spacing: -0.02em;
+}
+
+.account-order-status-visual {
+  position: relative;
+  padding: 8px 2px 0;
+}
+
+.account-order-status-line {
+  position: absolute;
+  top: 19px;
+  left: 9%;
+  right: 9%;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(142, 142, 147, 0.22);
+}
+
+.account-order-status-line span {
+  display: block;
+  width: var(--order-progress);
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #0071e3, #5ac8fa);
+}
+
+.account-order-status-visual--warning .account-order-status-line span {
+  background: linear-gradient(90deg, #ff9f0a, #ffd60a);
+}
+
+.account-order-status-visual--danger .account-order-status-line span {
+  width: 8%;
+  background: linear-gradient(90deg, #ff3b30, #ff9f0a);
+}
+
+.account-order-steps {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.account-order-step {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: #8e8e93;
+  text-align: center;
+}
+
+.account-order-step i {
+  width: 24px;
+  height: 24px;
+  border: 3px solid #f5f5f7;
+  border-radius: 999px;
+  background: #d1d1d6;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+.account-order-step small {
+  max-width: 100%;
+  overflow: hidden;
+  color: inherit;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-order-step.is-complete {
+  color: #1d1d1f;
+}
+
+.account-order-step.is-complete i {
+  background: #0071e3;
+  box-shadow: 0 0 0 1px rgba(0, 113, 227, 0.18), 0 4px 12px rgba(0, 113, 227, 0.24);
+}
+
+.account-order-step.is-current i {
+  background: linear-gradient(135deg, #0071e3, #5ac8fa);
+}
+
+.account-order-step.is-danger {
+  color: #c22d23;
+}
+
+.account-order-step.is-danger i {
+  background: #ff3b30;
+  box-shadow: 0 0 0 1px rgba(255, 59, 48, 0.18), 0 4px 12px rgba(255, 59, 48, 0.18);
+}
+
+.account-order-items-wrap {
+  padding: 8px;
+  border-radius: 22px;
+  background: #f5f5f7;
+}
+
+.account-order-items-head {
+  margin: 2px 6px 6px;
+  color: #1d1d1f;
+  font-size: 0.82rem;
+}
+
+.account-order-items {
+  gap: 0;
+}
+
+.account-order-item {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 50px;
+  padding: 5px 7px;
+  border-top: 0;
+  border-radius: 16px;
+}
+
+.account-order-item + .account-order-item {
+  margin-top: 3px;
+}
+
+.account-order-item:hover {
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.account-order-item-media {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  overflow: hidden;
+  place-items: center;
+  border: 1px solid rgba(0, 0, 0, 0.055);
+  border-radius: 13px;
+  background: #fff;
+  text-decoration: none;
+}
+
+.account-order-item-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.account-order-item-media span {
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #d1d1d6, #f5f5f7);
+}
+
+.account-order-item-title {
+  min-width: 0;
+  overflow: hidden;
+  color: #1d1d1f;
+  font-size: 0.91rem;
+  font-weight: 750;
+  letter-spacing: -0.018em;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-order-item-title:hover {
+  color: #0071e3;
+}
+
+.account-order-item strong {
+  min-width: 34px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.86);
+  color: #1d1d1f;
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+@media (max-width: 520px) {
+  .account-order-step small {
+    display: none;
+  }
+
+  .account-order-status-line {
+    left: 10%;
+    right: 10%;
+  }
+}
+
+.account-order-history-list {
+  gap: 22px;
+  margin-top: 22px;
+}
+
+.account-order-card {
+  gap: 20px;
+}
+
+.account-order-card-head {
+  padding-bottom: 2px;
+}
+
+.account-order-status-visual {
+  margin: 2px 0 4px;
+}
+
+.account-order-products-wrap {
+  padding: 12px;
+  border-radius: 24px;
+  background: #f5f5f7;
+}
+
+.account-order-product-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+}
+
+.account-order-thumb {
+  position: relative;
+  display: grid;
+  width: 54px;
+  height: 54px;
+  overflow: visible;
+  place-items: center;
+  border: 1px solid rgba(0, 0, 0, 0.055);
+  border-radius: 17px;
+  background: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 8px 18px rgba(0, 0, 0, 0.055);
+  text-decoration: none;
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.account-order-thumb:hover {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 12px 26px rgba(0, 0, 0, 0.09);
+  transform: translateY(-1px);
+}
+
+.account-order-thumb img {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 16px;
+  object-fit: cover;
+}
+
+.account-order-thumb span {
+  width: 22px;
+  height: 22px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #d1d1d6, #f5f5f7);
+}
+
+.account-order-thumb b {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 23px;
+  height: 23px;
+  padding: 0 6px;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: #1d1d1f;
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 900;
+  line-height: 19px;
+  text-align: center;
+  box-shadow: 0 5px 14px rgba(0, 0, 0, 0.18);
+}
+
+@media (max-width: 520px) {
+  .account-order-history-list {
+    gap: 18px;
+    margin-top: 18px;
+  }
+
+  .account-order-card {
+    gap: 17px;
+  }
+
+  .account-order-products-wrap {
+    padding: 10px;
+  }
+
+  .account-order-thumb {
+    width: 50px;
+    height: 50px;
+    border-radius: 16px;
+  }
+}
