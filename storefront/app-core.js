@@ -1,11 +1,11 @@
 import { selldoneImagePathToUrl } from "/dashboard/features/selldone-images.js?v=storefront-cart-image-20260614b";
-import { renderHomePage as renderHomePageModule } from "./home-page.js?v=storefront-promo-compact-20260620";
-import { renderProductPage as renderProductPageModule } from "./product-page.js?v=storefront-promo-compact-20260620";
-import { renderUserMenu } from "./user-menu.js?v=storefront-promo-compact-20260620";
-import { renderAccountProfileOverviewPage } from "./account-profile.js?v=storefront-promo-compact-20260620";
-import { renderOrderHistoryPage } from "./order-history.js?v=storefront-promo-compact-20260620";
-import { renderOrderDetailPage } from "./order-detail.js?v=storefront-promo-compact-20260620";
-import { createStorefrontPayments } from "./payments.js?v=storefront-promo-compact-20260620";
+import { renderHomePage as renderHomePageModule } from "./home-page.js?v=storefront-promo-short-20260620";
+import { renderProductPage as renderProductPageModule } from "./product-page.js?v=storefront-promo-short-20260620";
+import { renderUserMenu } from "./user-menu.js?v=storefront-promo-short-20260620";
+import { renderAccountProfileOverviewPage } from "./account-profile.js?v=storefront-promo-short-20260620";
+import { renderOrderHistoryPage } from "./order-history.js?v=storefront-promo-short-20260620";
+import { renderOrderDetailPage } from "./order-detail.js?v=storefront-promo-short-20260620";
+import { createStorefrontPayments } from "./payments.js?v=storefront-promo-short-20260620";
 
 const SPRITE_COLUMNS = 4;
 const SPRITE_ROWS = 4;

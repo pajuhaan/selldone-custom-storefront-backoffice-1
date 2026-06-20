@@ -1,4 +1,4 @@
-import * as storefront from "./app-core.js?v=storefront-promo-compact-20260620";
+import * as storefront from "./app-core.js?v=storefront-promo-short-20260620";
 
 const {
   state,
