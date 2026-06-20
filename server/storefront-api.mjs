@@ -109,6 +109,12 @@ export async function handleStorefrontApi(req, res, url, storefrontSession = nul
     return true;
   }
 
+  if (pathname === "/api/storefront/orders/history" && req.method === "GET") {
+    const result = await fetchStorefrontOrderHistory(storefrontSession, url);
+    sendJson(res, result.ok ? 200 : result.status || 502, result);
+    return true;
+  }
+
   if (pathname === "/api/storefront/shop/info" && req.method === "GET") {
     const result = await fetchStorefrontShopInfo();
     sendJson(res, result.ok ? 200 : result.status || 502, result);
@@ -402,6 +408,7 @@ async function checkoutStorefrontPhysicalBasket(session, payload = {}, req = nul
       basket,
     };
   }
+  const gateway = findStorefrontGatewayByCode(gatewayCode, shopInfo.payload);
 
   const buyEndpoint = new URL(`${STOREFRONT_XAPI_BASE}/shops/@${STOREFRONT_SHOP_HANDLE}/basket/${encodeURIComponent(STOREFRONT_PHYSICAL_BASKET_TYPE)}/buy/${encodeURIComponent(gatewayCode)}`);
   const buyResult = await requestStorefrontAuthorizedEndpoint(token, buyEndpoint, {
@@ -434,6 +441,7 @@ async function checkoutStorefrontPhysicalBasket(session, payload = {}, req = nul
 
   return normalizeStorefrontCheckoutResult({
     gatewayCode,
+    gateway,
     basket,
     bill,
     config: configResult.payload,
@@ -656,7 +664,6 @@ function normalizeStorefrontCheckoutPayload(payload = {}) {
 function resolveStorefrontCheckoutGateway(requestedGateway, bill = {}, shopPayload = {}) {
   const requested = String(requestedGateway || "").trim();
   if (requested && requested !== "auto") return requested;
-  if (bill?.can_cod === true) return "cod";
   const currency = String(firstNonNull(bill.currency, bill.currency_code, "")).trim();
   const gateways = extractStorefrontGateways(shopPayload);
   const eligible = gateways.filter((gateway) => {
@@ -666,7 +673,8 @@ function resolveStorefrontCheckoutGateway(requestedGateway, bill = {}, shopPaylo
     if (currency && gatewayCurrency && gatewayCurrency !== currency) return false;
     return !gateway.cod;
   });
-  return firstNonNull(...eligible.map(gatewayCodeFromPayload), null);
+  const stripeGateway = eligible.find((gateway) => isStripeGateway(gatewayCodeFromPayload(gateway), gateway));
+  return firstNonNull(gatewayCodeFromPayload(stripeGateway), ...eligible.map(gatewayCodeFromPayload), bill?.can_cod === true ? "cod" : null);
 }
 
 function gatewayCodeFromPayload(gateway = {}) {
@@ -682,6 +690,38 @@ function extractStorefrontGateways(payload = {}) {
     payload?.result?.shop?.gateways,
     payload?.payload?.shop?.gateways,
   );
+}
+
+function findStorefrontGatewayByCode(code, payload = {}) {
+  const target = String(code || "").trim().toLowerCase();
+  return extractStorefrontGateways(payload).find((gateway) => String(gatewayCodeFromPayload(gateway) || "").trim().toLowerCase() === target) || null;
+}
+
+function isStripeGateway(code, gateway = {}) {
+  const text = [
+    code,
+    gateway?.code,
+    gateway?.name,
+    gateway?.title,
+    gateway?.gateway_code,
+    gateway?.gatewayCode,
+    gateway?.type,
+  ].map((value) => String(value || "").toLowerCase()).join(" ");
+  return text.includes("stripe");
+}
+
+function gatewayPublicKey(gateway = {}) {
+  return String(firstNonNull(
+    gateway?.public?.key,
+    gateway?.public?.publishable_key,
+    gateway?.public?.publishableKey,
+    gateway?.public_key,
+    gateway?.publishable_key,
+    gateway?.publishableKey,
+    gateway?.stripe_public_key,
+    gateway?.stripePublishableKey,
+    "",
+  ) || "").trim();
 }
 
 function checkoutAmountCheck(bill = {}, payload = {}) {
@@ -713,17 +753,29 @@ function storefrontReturnUrl(req = null) {
   return `${proto}://${host}/#checkout`;
 }
 
-function normalizeStorefrontCheckoutResult({ gatewayCode, basket, bill, config, payment, endpoint }) {
+function normalizeStorefrontCheckoutResult({ gatewayCode, gateway, basket, bill, config, payment, endpoint }) {
   const payload = payment && typeof payment === "object" ? payment : {};
   const targetId = firstNonNull(payload.target_id, payload.targetId, payload.order_id, payload.orderId, payload.basket_id, payload.basketId, payload.id, null);
   const completed = Boolean(payload.payed_by_gift_card || payload.free_order || payload.cod || payload.dir || targetId);
   const link = firstNonNull(payload.link, payload.url, payload.redirect, payload.redirect_url, payload.order_url, null);
   const method = String(firstNonNull(payload.method, link ? "GET" : "", "")).trim().toUpperCase();
+  const stripe = isStripeGateway(gatewayCode, gateway);
+  const publicKey = gatewayPublicKey(gateway);
   return {
     ok: true,
     source: "storefront_checkout",
     status: 200,
     gatewayCode,
+    gateway: gateway ? {
+      code: gatewayCode,
+      title: firstNonNull(gateway.title, gateway.name, gatewayCode),
+      stripe,
+      publicKey,
+      public: gateway.public || null,
+    } : { code: gatewayCode, title: gatewayCode, stripe, publicKey },
+    stripe: stripe ? {
+      publishableKey: publicKey,
+    } : null,
     completed,
     orderId: targetId,
     basket,
@@ -897,6 +949,84 @@ async function fetchStorefrontProducts(url) {
 async function fetchStorefrontProduct(productId) {
   const endpoint = new URL(`${STOREFRONT_XAPI_BASE}/shops/@${STOREFRONT_SHOP_HANDLE}/products/${encodeURIComponent(productId)}/info`);
   return requestStorefrontXapi(endpoint, "product");
+}
+
+async function fetchStorefrontOrderHistory(session, url) {
+  const requestedType = String(url.searchParams.get("type") || "PHYSICAL").trim().toUpperCase();
+  const type = requestedType === "PHYSICAL" ? "PHYSICAL" : "PHYSICAL";
+  const endpoint = new URL(`${STOREFRONT_XAPI_BASE}/shops/@${STOREFRONT_SHOP_HANDLE}/basket/orders-${encodeURIComponent(type)}`);
+  const limit = clampInteger(url.searchParams.get("limit"), 1, 100, 40);
+  const offset = clampInteger(url.searchParams.get("offset"), 0, 100000, 0);
+
+  endpoint.searchParams.set("limit", String(limit));
+  endpoint.searchParams.set("offset", String(offset));
+
+  try {
+    const token = await ensureStorefrontToken(session);
+    if (!token) {
+      return {
+        ok: false,
+        source: "storefront_order_history",
+        status: 401,
+        endpoint: publicStorefrontEndpoint(endpoint),
+        error: "Authentication required to load Selldone order history.",
+      };
+    }
+
+    const response = await fetch(endpoint, {
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+        "X-Requested-With": "XMLHttpRequest",
+      },
+    });
+    const payload = await readStorefrontResponsePayload(response);
+    const storefrontError = detectStorefrontApiError(payload, response.status);
+
+    if (!response.ok || storefrontError) {
+      return {
+        ok: false,
+        source: "storefront_order_history",
+        status: storefrontError?.status || response.status,
+        endpoint: publicStorefrontEndpoint(endpoint),
+        error: storefrontError?.error || readStorefrontApiMessage(payload) || `${response.statusText || "Selldone order history request failed"} (${response.status}).`,
+        payload,
+      };
+    }
+
+    const orders = firstArray(
+      payload?.orders,
+      payload?.baskets,
+      payload?.items,
+      payload?.data?.orders,
+      payload?.data?.baskets,
+      payload?.data?.items,
+      payload?.result?.orders,
+      payload?.result?.baskets,
+      payload?.payload?.orders,
+      payload?.payload?.baskets,
+    );
+
+    return {
+      ok: true,
+      source: "storefront_order_history",
+      apiBaseUrl: STOREFRONT_XAPI_BASE,
+      endpoint: publicStorefrontEndpoint(endpoint),
+      type,
+      count: orders.length,
+      total: firstNonNull(payload?.total, payload?.data?.total, payload?.result?.total, payload?.payload?.total, orders.length),
+      orders,
+      payload,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      source: "storefront_order_history",
+      status: 502,
+      endpoint: publicStorefrontEndpoint(endpoint),
+      error: error?.message || "Selldone order history request failed.",
+    };
+  }
 }
 
 async function fetchStorefrontBlogs(url) {

@@ -2938,6 +2938,21 @@ img.large-sprite {
   font-size: 11px;
 }
 
+.checkout-payment-option em {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 7px;
+  border-radius: 999px;
+  background: rgba(19, 26, 22, 0.08);
+  color: var(--ink);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  padding: 4px 8px;
+  text-transform: uppercase;
+}
+
 .checkout-status {
   margin-top: 10px;
   padding: 10px 12px;
@@ -3324,5 +3339,99 @@ img.large-sprite {
     align-items: start;
     flex-direction: column;
     padding: 12px 0;
+  }
+}
+
+.account-order-history-list {
+  display: grid;
+  gap: 16px;
+}
+
+.account-order-card {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgba(24, 22, 18, 0.12);
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(248, 241, 229, 0.78));
+  box-shadow: 0 18px 42px rgba(66, 50, 32, 0.08);
+}
+
+.account-order-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.account-order-card-head h2 {
+  margin: 4px 0 0;
+  font-size: clamp(1.05rem, 2vw, 1.35rem);
+}
+
+.account-order-date {
+  color: var(--muted);
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.account-order-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: rgba(141, 170, 75, 0.16);
+  color: #4f671f;
+  font-size: 0.82rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.account-order-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.account-order-meta span {
+  padding: 8px 11px;
+  border-radius: 999px;
+  background: rgba(24, 22, 18, 0.06);
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.account-order-items {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.account-order-items li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid rgba(24, 22, 18, 0.08);
+  color: var(--muted);
+}
+
+.account-order-items li strong {
+  color: var(--ink);
+}
+
+@media (max-width: 640px) {
+  .account-order-card-head {
+    display: grid;
+  }
+
+  .account-order-status {
+    justify-self: flex-start;
   }
 }

@@ -1,4 +1,6 @@
 import { selldoneImagePathToUrl } from "/dashboard/features/selldone-images.js?v=storefront-cart-image-20260614b";
+import { renderOrderHistoryPage } from "./order-history.js?v=storefront-orders-payments-20260620";
+import { createStorefrontPayments } from "./payments.js?v=storefront-orders-payments-20260620";
 
 const SPRITE_COLUMNS = 4;
 const SPRITE_ROWS = 4;
@@ -116,12 +118,14 @@ const state = {
   pageLoading: false,
   pageLoadingCount: 0,
   checkoutSubmitting: false,
+  stripeLoading: false,
   cartLoaded: false,
   cartLoading: false,
   cartLoadError: "",
   cartUpdatingKeys: new Set(),
   storefrontShopInfo: null,
   checkoutGatewayCode: "",
+  stripePublishableKey: "",
   xapiEndpoint: null,
   blogs: [],
   blogCategories: [],
@@ -3155,87 +3159,29 @@ function checkoutBillMessages(bill = {}) {
     .filter(Boolean);
 }
 
-function checkoutGateways(currency = "") {
-  const gateways = firstArrayValue(
-    state.storefrontShopInfo?.gateways,
-    state.storefrontShopInfo?.shop?.gateways,
-  );
-  const desiredCurrency = String(currency || "").trim();
-  return gateways
-    .filter((gateway) => gateway && typeof gateway === "object")
-    .filter((gateway) => gateway.enable !== false && gateway.enabled !== false && gateway.active !== false)
-    .filter((gateway) => {
-      const gatewayCurrency = String(firstNonNull(gateway.currency, gateway.currency_code, "") || "").trim();
-      return !desiredCurrency || !gatewayCurrency || gatewayCurrency === desiredCurrency;
-    })
-    .map((gateway) => {
-      const code = String(firstNonNull(gateway.code, gateway.gateway_code, gateway.gatewayCode, gateway.name, gateway.type, gateway.id, "") || "").trim();
-      if (!code) return null;
-      return {
-        code,
-        title: String(firstNonNull(gateway.title, gateway.name, gateway.label, code) || code),
-        cod: gateway.cod === true || code.toLowerCase() === "cod",
-      };
-    })
-    .filter(Boolean);
-}
+const storefrontPayments = createStorefrontPayments({
+  state,
+  firstArrayValue,
+  firstNonNull,
+  escapeHtml,
+  showToast,
+  renderLiveCatalogEmptyState,
+});
 
-function checkoutDefaultGatewayCode(bill = {}, currency = "") {
-  const current = String(state.checkoutGatewayCode || "").trim();
-  const gateways = checkoutGateways(currency);
-  const gatewayCodes = gateways.map((gateway) => gateway.code);
-  if (current && (current === "cod" || gatewayCodes.includes(current))) return current;
-  if (bill?.can_cod === true) return "cod";
-  return gateways.find((gateway) => !gateway.cod)?.code || gatewayCodes[0] || "auto";
+function checkoutGateways(currency = "") {
+  return storefrontPayments.checkoutGateways(currency);
 }
 
 function renderCheckoutPaymentOptions(bill = {}, currency = "") {
-  const selected = checkoutDefaultGatewayCode(bill, currency);
-  state.checkoutGatewayCode = selected;
-  const gateways = checkoutGateways(currency).filter((gateway) => !gateway.cod);
-  const options = [
-    bill?.can_cod === true
-      ? {
-          code: "cod",
-          title: "Cash on delivery",
-          body: "Pay when the physical order is delivered.",
-        }
-      : null,
-    ...gateways.map((gateway) => ({
-      code: gateway.code,
-      title: gateway.title,
-      body: "Pay securely through Selldone.",
-    })),
-  ].filter(Boolean);
-
-  if (!options.length) {
-    return `<p class="checkout-status checkout-status--error">No Selldone payment gateway is available for this basket.</p>`;
-  }
-
-  return `
-    <div class="checkout-payment-options" role="radiogroup" aria-label="Payment method">
-      ${options
-        .map(
-          (option) => `
-            <label class="checkout-payment-option ${selected === option.code ? "is-active" : ""}">
-              <input type="radio" name="gatewayCode" value="${escapeHtml(option.code)}" ${selected === option.code ? "checked" : ""} />
-              <span>
-                <strong>${escapeHtml(option.title)}</strong>
-                <small>${escapeHtml(option.body)}</small>
-              </span>
-            </label>
-          `,
-        )
-        .join("")}
-    </div>
-  `;
+  return storefrontPayments.renderCheckoutPaymentOptions(bill, currency);
 }
 
 function checkoutSubmitLabel(bill = {}) {
-  if (!state.sessionAuthenticated) return "Log in to place order";
-  if (state.checkoutSubmitting) return "Processing checkout...";
-  if (bill?.can_cod === true && state.checkoutGatewayCode === "cod") return "Place COD order";
-  return "Continue to payment";
+  return storefrontPayments.checkoutSubmitLabel(bill);
+}
+
+async function handleStripeCheckoutResult(result = {}, requestPayload = {}) {
+  return storefrontPayments.handleStripeCheckoutResult(result, requestPayload);
 }
 
 function submitRedirectForm(url, method = "GET", fields = {}) {
@@ -3296,33 +3242,15 @@ async function renderAccountProfilePage(section = "profile") {
 
   const accountSection = String(section || "profile").trim().toLowerCase();
   if (accountSection === "orders" || accountSection === "history") {
-    await hydrateStorefrontCart();
-    const activeEntries = cartEntries();
-    els.app.innerHTML = `
-      <div class="page-shell">
-        <nav class="breadcrumbs" aria-label="Account path">
-          <a href="#home">Home</a><span>/</span><a href="#account/profile">Account</a><span>/</span><strong>Orders</strong>
-        </nav>
-        <section class="section">
-          <div class="account-profile-panel">
-            <div class="account-profile-head">
-              <div>
-                <h1>Order history</h1>
-                <p class="product-meta">Your storefront order-history scope is active. Completed Selldone orders will appear here when the order-history endpoint is connected.</p>
-              </div>
-            </div>
-            <div class="account-order-history-empty">
-              <strong>No local order list loaded yet</strong>
-              <p>Current physical basket has ${activeEntries.length} ${activeEntries.length === 1 ? "item" : "items"}. Use the bag or checkout to continue shopping.</p>
-              <div class="account-profile-actions">
-                <button type="button" class="black-button" data-account-menu-cart>Open current bag</button>
-                <a class="text-link" href="#shop">Back to shop</a>
-              </div>
-            </div>
-          </div>
-        </section>
-      </div>
-    `;
+    await renderOrderHistoryPage({
+      state,
+      els,
+      escapeHtml,
+      firstArrayValue,
+      firstNonNull,
+      formatPrice,
+      showToast,
+    });
     return;
   }
 
@@ -3652,6 +3580,8 @@ async function handleCheckoutSubmit(event) {
       submitRedirectForm(result.redirect.url, result.redirect.method, result.redirect.fields);
       return;
     }
+
+    if (await handleStripeCheckoutResult(result, payload)) return;
 
     if (result.pending) {
       showToast("Payment is pending. Please complete it in Selldone.");
