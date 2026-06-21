@@ -6351,3 +6351,141 @@ body.quick-buy-open {
 .order-success-card .account-profile-actions {
   justify-content: center;
 }
+.product-article-section {
+  margin-top: 24px;
+  border: 1px solid rgba(29, 29, 31, 0.08);
+  border-radius: 24px;
+  background: #ffffff;
+  padding: clamp(18px, 3vw, 28px);
+}
+
+.product-article-section h2 {
+  margin: 6px 0 14px;
+  color: #1d1d1f;
+  font-size: clamp(1.45rem, 2.4vw, 2.1rem);
+  line-height: 1.04;
+  letter-spacing: -0.035em;
+}
+
+.product-article-content {
+  display: grid;
+  gap: 12px;
+  color: #3f3a31;
+  font-size: 0.98rem;
+  line-height: 1.68;
+}
+
+.product-article-content :is(p, ul, ol, blockquote, h2, h3, h4) {
+  margin: 0;
+}
+
+.product-article-content :is(h2, h3, h4) {
+  color: #1d1d1f;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.product-article-content ul,
+.product-article-content ol {
+  padding-left: 1.2rem;
+}
+
+.product-article-content blockquote {
+  border-left: 3px solid #1f8f3a;
+  padding-left: 14px;
+  color: #5f5a51;
+}
+
+.product-article-content a {
+  color: #1d1d1f;
+  font-weight: 800;
+  text-decoration: underline;
+}
+
+.product-article-content img {
+  width: 100%;
+  max-height: 420px;
+  object-fit: cover;
+  border-radius: 18px;
+}
+.product-article-content table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow: hidden;
+  border: 1px solid rgba(29, 29, 31, 0.08);
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.product-article-content th,
+.product-article-content td {
+  border-bottom: 1px solid rgba(29, 29, 31, 0.07);
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.product-article-content tr:last-child th,
+.product-article-content tr:last-child td {
+  border-bottom: 0;
+}
+
+.product-article-content th {
+  background: #f7f7f4;
+  color: #1d1d1f;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.product-article-content td {
+  color: #4b443d;
+}
+.routine-step p s {
+  margin-left: 6px;
+  color: #8a8178;
+  font-size: 0.86em;
+}
+
+.routine-step p em {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  margin-left: 7px;
+  border-radius: 999px;
+  background: rgba(31, 143, 58, 0.12);
+  color: #147a2d;
+  padding: 0 8px;
+  font-style: normal;
+  font-size: 0.76rem;
+  font-weight: 900;
+  vertical-align: middle;
+}
+.product-detail-layout + .product-article-section {
+  margin-top: clamp(28px, 5vw, 56px);
+  margin-bottom: clamp(22px, 4vw, 42px);
+  width: 100%;
+}
+
+.product-detail-layout + .product-article-section .product-article-content {
+  max-width: none;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.product-detail-layout + .product-article-section h2 {
+  max-width: 920px;
+  font-size: clamp(2rem, 4vw, 3.8rem);
+}
+
+.product-detail-layout + .product-article-section .product-article-content > p,
+.product-detail-layout + .product-article-section .product-article-content > ul,
+.product-detail-layout + .product-article-section .product-article-content > ol,
+.product-detail-layout + .product-article-section .product-article-content > blockquote {
+  max-width: 920px;
+}
+
+.product-detail-layout + .product-article-section .product-article-content table,
+.product-detail-layout + .product-article-section .product-article-content figure,
+.product-detail-layout + .product-article-section .product-article-content .medium-insert-images {
+  max-width: 100%;
+}

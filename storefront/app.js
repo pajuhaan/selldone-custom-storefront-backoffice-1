@@ -1,3 +1,3 @@
-import { registerStorefrontInteractions } from "./app-events.js?v=storefront-order-success-flow-20260621";
+import { registerStorefrontInteractions } from "./app-events.js?v=storefront-product-article-wide-20260621";
 
 registerStorefrontInteractions();

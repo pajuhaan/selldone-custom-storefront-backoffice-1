@@ -10,6 +10,191 @@ function productIsFavorite(productId = "") {
   }
 }
 
+function localEscapeHtml(value = "") {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function firstObject(...values) {
+  return values.find((value) => value && typeof value === "object" && !Array.isArray(value)) || {};
+}
+
+function productArticleContent(item = {}, firstNonNull) {
+  const article = firstObject(
+    item.article,
+    item.product_article,
+    item.productArticle,
+    item.article_data,
+    item.articleData,
+    item.article_pack?.article,
+    item.articlePack?.article,
+    item.blog,
+    item.data?.article,
+    item.payload?.article,
+  );
+  return String(firstNonNull(
+    article.body_html,
+    article.content_html,
+    article.bodyHtml,
+    article.contentHtml,
+    article.article_body,
+    article.articleBody,
+    article.html,
+    article.body,
+    article.content,
+    article.text,
+    item.article_body_html,
+    item.articleBodyHtml,
+    item.article_body,
+    item.articleBody,
+    item.article_html,
+    item.articleHtml,
+    item.content_html,
+    item.contentHtml,
+    "",
+  ) || "").trim();
+}
+
+function productArticleTitle(item = {}, firstNonNull) {
+  const article = firstObject(
+    item.article,
+    item.product_article,
+    item.productArticle,
+    item.article_data,
+    item.articleData,
+    item.article_pack?.article,
+    item.articlePack?.article,
+    item.blog,
+    item.data?.article,
+    item.payload?.article,
+  );
+  return String(firstNonNull(article.title, article.name, item.article_title, item.articleTitle, "Product article") || "Product article").trim();
+}
+
+function sanitizeProductArticleHtml(rawHtml = "") {
+  const source = String(rawHtml || "").trim();
+  if (!source) return "";
+  if (!source.includes("<")) {
+    return source
+      .split(/\n{2,}/)
+      .map((paragraph) => paragraph.trim())
+      .filter(Boolean)
+      .map((paragraph) => `<p>${localEscapeHtml(paragraph).replace(/\n/g, "<br>")}</p>`)
+      .join("");
+  }
+
+  const template = document.createElement("template");
+  template.innerHTML = source;
+  const allowedTags = new Set([
+    "P",
+    "BR",
+    "STRONG",
+    "B",
+    "EM",
+    "I",
+    "U",
+    "UL",
+    "OL",
+    "LI",
+    "H2",
+    "H3",
+    "H4",
+    "BLOCKQUOTE",
+    "A",
+    "IMG",
+    "DIV",
+    "FIGURE",
+    "TABLE",
+    "THEAD",
+    "TBODY",
+    "TR",
+    "TH",
+    "TD",
+  ]);
+  const allowedAttrs = {
+    A: new Set(["href", "title", "target", "rel"]),
+    IMG: new Set(["src", "alt", "title", "loading"]),
+  };
+  Array.from(template.content.querySelectorAll("*")).forEach((node) => {
+    if (!node.parentNode) return;
+    if (!allowedTags.has(node.tagName)) {
+      const fragment = document.createDocumentFragment();
+      Array.from(node.childNodes).forEach((child) => fragment.appendChild(child));
+      node.parentNode.replaceChild(fragment, node);
+      return;
+    }
+    Array.from(node.attributes).forEach((attr) => {
+      const allowed = allowedAttrs[node.tagName]?.has(attr.name);
+      if (!allowed) node.removeAttribute(attr.name);
+    });
+    if (node.tagName === "A") {
+      const href = String(node.getAttribute("href") || "").trim();
+      if (/^(javascript|data):/i.test(href)) node.removeAttribute("href");
+      node.setAttribute("target", "_blank");
+      node.setAttribute("rel", "noopener noreferrer");
+    }
+    if (node.tagName === "IMG") {
+      const src = String(node.getAttribute("src") || "").trim();
+      if (!src || /^(javascript|data):/i.test(src)) node.remove();
+      else node.setAttribute("loading", "lazy");
+    }
+  });
+  return template.innerHTML.trim();
+}
+
+function renderProductArticleSection(item = {}, firstNonNull, escapeHtml) {
+  const content = sanitizeProductArticleHtml(productArticleContent(item, firstNonNull));
+  if (!content) return "";
+  return `
+    <section class="product-article-section">
+      <span class="product-meta">Article</span>
+      <h2>${escapeHtml(productArticleTitle(item, firstNonNull))}</h2>
+      <div class="product-article-content">${content}</div>
+    </section>
+  `;
+}
+
+function firstArray(...values) {
+  return values.find((value) => Array.isArray(value)) || [];
+}
+
+function crossSellProductId(entry = {}, firstNonNull) {
+  if (!entry || typeof entry !== "object") return String(entry || "").trim();
+  return String(firstNonNull(
+    entry.product_id,
+    entry.productId,
+    entry.id,
+    entry.item_id,
+    entry.itemId,
+    entry.target_id,
+    entry.targetId,
+    entry.product?.id,
+    entry.item?.id,
+    "",
+  ) || "").trim();
+}
+
+function crossSellDiscount(entry = {}, product = {}, toNumber) {
+  return Math.max(
+    0,
+    toNumber(entry?.discount, 0),
+    toNumber(entry?.percent, 0),
+    toNumber(entry?.offer, 0),
+    toNumber(entry?.off, 0),
+    toNumber(product?.discount, 0),
+  );
+}
+
+function productHasDiscount(product = {}, toNumber) {
+  const price = toNumber(product.price, 0);
+  const original = toNumber(product.original, 0);
+  return toNumber(product.discount, 0) > 0 || (original > 0 && price > 0 && original > price);
+}
+
 export async function renderProductPage(deps) {
   const {
     productId,
@@ -18,6 +203,7 @@ export async function renderProductPage(deps) {
     els,
     getProductById,
     fetchXapiProductDetail,
+    ensureProductsForPage,
     productNeedsStorefrontDetail,
     renderLiveCatalogEmptyState,
     ensureShopTransportationsLoaded,
@@ -107,11 +293,61 @@ export async function renderProductPage(deps) {
     state.activeMedia = state.activeProductGallery[0];
   }
 
+  if (typeof ensureProductsForPage === "function") {
+    await ensureProductsForPage();
+  }
   const catalog = getProductsForUi();
-  const related = catalog.filter((entry) => entry.category === category && entry.id !== item.id).slice(0, 4);
-  const similar = catalog.filter((entry) => entry.subcategory === subcategory && entry.id !== item.id).slice(0, 4);
-
+  const catalogWithoutCurrent = catalog.filter((entry) => String(entry.id) !== String(item.id));
+  const pickProductRail = (primary = []) => {
+    const seen = new Set();
+    const picked = [];
+    [...primary, ...catalogWithoutCurrent].forEach((entry) => {
+      const key = String(entry?.id || "");
+      if (!entry || !key || seen.has(key) || String(key) === String(item.id)) return;
+      seen.add(key);
+      picked.push(entry);
+    });
+    return picked.slice(0, 4);
+  };
+  const related = pickProductRail(catalogWithoutCurrent.filter((entry) => entry.category === category));
+  const similar = pickProductRail(catalogWithoutCurrent.filter((entry) => entry.subcategory === subcategory));
+  const crossSellSources = [
+    ...firstArray(item.includes),
+    ...firstArray(item.sells),
+    ...firstArray(item.crossSells),
+    ...firstArray(item.extraPricings),
+  ];
+  const crossSellSeen = new Set();
+  const crossSellRoutine = crossSellSources
+    .map((entry) => {
+      const directProduct = firstObject(entry?.product, entry?.item, entry);
+      const targetId = crossSellProductId(entry, firstNonNull);
+      const matched = targetId ? catalog.find((candidate) => String(candidate.id) === String(targetId)) : null;
+      const product = matched || (directProduct?.title ? directProduct : null);
+      if (!product || String(product.id || "") === String(item.id)) return null;
+      const id = String(product.id || targetId || product.title || "");
+      if (!id || crossSellSeen.has(id)) return null;
+      const discount = crossSellDiscount(entry, product, toNumber);
+      const original = toNumber(product.original, 0);
+      const price = toNumber(product.price, 0);
+      const hasDiscount = discount > 0 || productHasDiscount(product, toNumber) || toNumber(entry?.discount_amount, 0) > 0 || toNumber(entry?.discountAmount, 0) > 0;
+      if (!hasDiscount) return null;
+      crossSellSeen.add(id);
+      return {
+        ...product,
+        discount: discount || product.discount,
+        original: original || (discount > 0 && price > 0 ? price / (1 - Math.min(99.9, discount) / 100) : product.original),
+        crossSellLabel: String(firstNonNull(entry?.title, entry?.label, entry?.name, discount > 0 ? `${discount}% cross-sell` : "Cross-sell deal") || "Cross-sell deal"),
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 3);
   const catalogItem = (index, alternate = null) => catalog[index] || alternate || null;
+  const routineItems = crossSellRoutine.length
+    ? crossSellRoutine
+    : [catalogItem(4), item, catalogItem(11)].filter(Boolean);
+  const routineTitle = crossSellRoutine.length ? "Complete the set and save" : "Make it a routine";
+
   const isFavorite = productIsFavorite(item.id);
 
   els.app.innerHTML = `
@@ -198,17 +434,17 @@ export async function renderProductPage(deps) {
           </section>
 
           <section class="routine-box">
-            <h2>Make it a routine</h2>
-            ${routineStep("Step 1", catalogItem(4))}
-            ${routineStep("Step 2", item)}
-            ${routineStep("Step 3", catalogItem(11))}
+            <h2>${escapeHtml(routineTitle)}</h2>
+            ${routineItems.map((entry, index) => routineStep(crossSellRoutine.length ? `Deal ${index + 1}` : `Step ${index + 1}`, entry)).join("")}
             <button class="black-button" type="button" data-add-to-cart-product="${item.id}" data-variant-key="${escapeHtml(addButtonVariantKey)}">Add set to bag</button>
           </section>
         </article>
       </section>
 
-      ${renderProductSection("We think you'll like", "4 items", related, "product-row")}
-      ${renderProductSection("Similar items for you", "4 items", similar, "product-row")}
+      ${renderProductArticleSection(item, firstNonNull, escapeHtml)}
+
+      ${renderProductSection("We think you'll like", `${related.length} ${related.length === 1 ? "item" : "items"}`, related, "product-row")}
+      ${renderProductSection("Similar items for you", `${similar.length} ${similar.length === 1 ? "item" : "items"}`, similar, "product-row")}
 
       <section class="reviews-block" id="reviews">
         <div class="section-head">

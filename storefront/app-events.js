@@ -1,4 +1,4 @@
-import * as storefront from "./app-core.js?v=storefront-order-success-flow-20260621";
+import * as storefront from "./app-core.js?v=storefront-product-article-wide-20260621";
 
 const {
   state,

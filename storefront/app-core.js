@@ -1,12 +1,12 @@
 import { selldoneImagePathToUrl } from "/dashboard/features/selldone-images.js?v=storefront-cart-image-20260614b";
-import { renderHomePage as renderHomePageModule } from "./home-page.js?v=storefront-order-success-flow-20260621";
-import { renderProductPage as renderProductPageModule } from "./product-page.js?v=storefront-order-success-flow-20260621";
-import { renderUserMenu } from "./user-menu.js?v=storefront-order-success-flow-20260621";
-import { renderAccountProfileOverviewPage } from "./account-profile.js?v=storefront-order-success-flow-20260621";
-import { renderOrderHistoryPage } from "./order-history.js?v=storefront-order-success-flow-20260621";
-import { renderOrderDetailPage } from "./order-detail.js?v=storefront-order-success-flow-20260621";
-import { createStorefrontPayments } from "./payments.js?v=storefront-order-success-flow-20260621";
-import { createStorefrontQuickBuy } from "./quick-buy.js?v=storefront-order-success-flow-20260621";
+import { renderHomePage as renderHomePageModule } from "./home-page.js?v=storefront-product-article-wide-20260621";
+import { renderProductPage as renderProductPageModule } from "./product-page.js?v=storefront-product-article-wide-20260621";
+import { renderUserMenu } from "./user-menu.js?v=storefront-product-article-wide-20260621";
+import { renderAccountProfileOverviewPage } from "./account-profile.js?v=storefront-product-article-wide-20260621";
+import { renderOrderHistoryPage } from "./order-history.js?v=storefront-product-article-wide-20260621";
+import { renderOrderDetailPage } from "./order-detail.js?v=storefront-product-article-wide-20260621";
+import { createStorefrontPayments } from "./payments.js?v=storefront-product-article-wide-20260621";
+import { createStorefrontQuickBuy } from "./quick-buy.js?v=storefront-product-article-wide-20260621";
 
 const SPRITE_COLUMNS = 4;
 const SPRITE_ROWS = 4;
@@ -720,12 +720,104 @@ function mapProduct(raw) {
     type: firstNonNull(raw.type, raw.product_type, raw.kind, ""),
     files: Array.isArray(raw.files) ? raw.files : [],
     file: raw.file,
+    includes: Array.isArray(raw.includes) ? raw.includes : [],
+    sells: Array.isArray(raw.sells) ? raw.sells : [],
+    extraPricings: Array.isArray(raw.extra_pricings) ? raw.extra_pricings : Array.isArray(raw.extraPricings) ? raw.extraPricings : [],
+    crossSells: firstNonNull(raw.cross_sells, raw.crossSells, raw.cross_sell, raw.crossSell, raw.related_products, raw.relatedProducts, raw.recommended_products, raw.recommendedProducts, []),
     createdAt: raw.created_at || raw.createdAt || null,
     updatedAt: raw.updated_at || raw.updatedAt || null,
     description: firstNonNull(
       raw.description,
       raw.summary,
       "A polished daily essential designed for fresh color, smooth wear, and an easy beauty routine.",
+    ),
+    article: firstNonNull(
+      raw.article,
+      raw.product_article,
+      raw.productArticle,
+      raw.article_data,
+      raw.articleData,
+      raw.article_pack?.article,
+      raw.articlePack?.article,
+      raw.blog,
+      raw.data?.article,
+      raw.payload?.article,
+      raw.product?.article,
+      raw.data?.product?.article,
+      raw.payload?.product?.article,
+      null,
+    ),
+    article_title: firstNonNull(
+      raw.article_title,
+      raw.articleTitle,
+      raw.article?.title,
+      raw.product_article?.title,
+      raw.article_pack?.article?.title,
+      raw.articlePack?.article?.title,
+      raw.data?.article?.title,
+      raw.payload?.article?.title,
+      raw.product?.article?.title,
+      raw.data?.product?.article?.title,
+      raw.payload?.product?.article?.title,
+      null,
+    ),
+    article_body_html: firstNonNull(
+      raw.article_body_html,
+      raw.articleBodyHtml,
+      raw.article_html,
+      raw.articleHtml,
+      raw.body_html,
+      raw.bodyHtml,
+      raw.content_html,
+      raw.contentHtml,
+      raw.article?.body_html,
+      raw.article?.bodyHtml,
+      raw.article?.content_html,
+      raw.article?.contentHtml,
+      raw.product_article?.body_html,
+      raw.product_article?.content_html,
+      raw.article_pack?.article?.body_html,
+      raw.article_pack?.article?.content_html,
+      raw.articlePack?.article?.body_html,
+      raw.articlePack?.article?.content_html,
+      raw.data?.article?.body_html,
+      raw.data?.article?.content_html,
+      raw.payload?.article?.body_html,
+      raw.payload?.article?.content_html,
+      raw.product?.article?.body_html,
+      raw.product?.article?.content_html,
+      raw.data?.product?.article?.body_html,
+      raw.data?.product?.article?.content_html,
+      raw.payload?.product?.article?.body_html,
+      raw.payload?.product?.article?.content_html,
+      null,
+    ),
+    article_body: firstNonNull(
+      raw.article_body,
+      raw.articleBody,
+      raw.article_text,
+      raw.articleText,
+      raw.article?.body,
+      raw.article?.article_body,
+      raw.article?.content,
+      raw.article?.text,
+      raw.product_article?.body,
+      raw.product_article?.content,
+      raw.article_pack?.article?.body,
+      raw.article_pack?.article?.content,
+      raw.articlePack?.article?.body,
+      raw.articlePack?.article?.content,
+      raw.data?.article?.body,
+      raw.data?.article?.content,
+      raw.payload?.article?.body,
+      raw.payload?.article?.content,
+      raw.product?.article?.body,
+      raw.product?.article?.content,
+      raw.data?.product?.article?.body,
+      raw.data?.product?.article?.content,
+      raw.payload?.product?.article?.body,
+      raw.payload?.product?.article?.content,
+      null,
     ),
     pros: normalizeProductPros(firstNonNull(raw.pros, raw.product_pros, raw.productPros, raw.features, null), {
       id: String(productId),
@@ -1476,6 +1568,29 @@ function falseyFlag(value) {
   return value === false || value === 0 || String(value || "").trim().toLowerCase() === "false";
 }
 
+function extractBlogArticleContent(rawArticle = {}, fallbackArticle = null) {
+  const article = rawArticle || {};
+  const nestedArticle = fallbackArticle || (article.article && typeof article.article === "object" ? article.article : {});
+  return String(firstNonNull(
+    article.body,
+    article.content,
+    article.html,
+    article.text,
+    article.article_body,
+    article.raw_body,
+    article.body_html,
+    article.content_html,
+    nestedArticle.body,
+    nestedArticle.content,
+    nestedArticle.html,
+    nestedArticle.text,
+    nestedArticle.article_body,
+    nestedArticle.body_html,
+    nestedArticle.content_html,
+    "",
+  )).trim();
+}
+
 function mapBlogArticle(raw, index = 0) {
   if (!raw || typeof raw !== "object") return null;
   const id = firstNonNull(raw.id, raw.article_id, raw.articleId, raw.code, raw.slug);
@@ -1488,20 +1603,7 @@ function mapBlogArticle(raw, index = 0) {
     ? firstNonNull(raw.user.name, raw.user.username, raw.user.profile?.name, "")
     : firstNonNull(raw.author, raw.writer, "");
   const description = String(firstNonNull(raw.description, raw.summary, raw.excerpt, raw.subtitle, "")).trim();
-  const nestedArticle = raw.article && typeof raw.article === "object" ? raw.article : {};
-  const content = String(firstNonNull(
-    raw.body,
-    raw.content,
-    raw.html,
-    raw.text,
-    raw.article_body,
-    raw.body_html,
-    raw.content_html,
-    nestedArticle.body,
-    nestedArticle.content,
-    nestedArticle.html,
-    "",
-  )).trim();
+  const content = extractBlogArticleContent(raw);
 
   return {
     ...raw,
@@ -1521,7 +1623,7 @@ function mapBlogArticle(raw, index = 0) {
 }
 
 function blogArticleHasFullContent(article = {}) {
-  return Boolean(String(firstNonNull(article?.content, article?.body, article?.html, "") || "").trim());
+  return Boolean(extractBlogArticleContent(article));
 }
 
 function applyStorefrontBlogs(payload) {
@@ -1611,11 +1713,11 @@ async function ensureBlogArticleLoaded(articleId) {
     const mapped = upsertBlogArticle(article);
     if (blogArticleHasFullContent(mapped)) return mapped;
     state.blogsLoadError = "Selldone did not return the full article content for this post.";
-    return blogArticleHasFullContent(existing) ? existing : null;
+    return mapped || existing || null;
   } catch (error) {
     console.warn("Selldone blog article detail fetch failed:", error);
     state.blogsLoadError = `Could not load Selldone blog post content. ${error.message || ""}`.trim();
-    return blogArticleHasFullContent(existing) ? existing : null;
+    return existing || null;
   }
 }
 
@@ -1675,7 +1777,7 @@ function renderBlogCard(article, options = {}) {
           ${blogArticleDate(article) ? `<span>${escapeHtml(blogArticleDate(article))}</span>` : ""}
         </div>
         <h2><a href="${blogArticleUrl(article)}">${escapeHtml(article.title)}</a></h2>
-        <p>${escapeHtml(article.description || "Read the latest Pajulina storefront update.")}</p>
+        <p>${escapeHtml(blogArticleSummary(article))}</p>
         <a class="text-link" href="${blogArticleUrl(article)}">Read article</a>
       </div>
     </article>
@@ -1722,10 +1824,18 @@ function sanitizeArticleHtml(rawHtml) {
 }
 
 function renderBlogBody(article) {
-  const content = sanitizeArticleHtml(article?.content || article?.body || article?.html || "");
+  const content = sanitizeArticleHtml(extractBlogArticleContent(article));
   if (content) return content;
-  const description = article?.description || "This article is available in the Selldone blog feed.";
-  return `<p>${escapeHtml(description)}</p>`;
+  const fallback = String(state.blogsLoadError || "").trim() || "The complete article body is not available from Selldone yet.";
+  return `<p>${escapeHtml(fallback)}</p>`;
+}
+
+function blogArticleSummary(article, maxLength = 160) {
+  const bodyText = String(extractBlogArticleContent(article) || "").trim();
+  if (!bodyText) return "Read the latest Pajulina storefront update.";
+  const plain = bodyText.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  if (plain.length <= maxLength) return plain;
+  return `${plain.slice(0, Math.max(0, maxLength)).trim()}...`;
 }
 
 function findBlogArticle(articleId) {
@@ -1779,7 +1889,7 @@ function renderHomeBlogImage(article) {
 
 function renderHomeBlogTile(article) {
   const date = blogArticleDate(article);
-  const description = article.description || "Read the latest Pajulina storefront update.";
+  const description = blogArticleSummary(article, 120);
   return `
     <article class="home-blog-tile">
       <a class="home-blog-media" href="${blogArticleUrl(article)}" aria-label="${escapeHtml(article.title)}">
@@ -3022,6 +3132,10 @@ function miniProduct(item) {
 function routineStep(label, item) {
   if (!item) return "";
   const href = `#product/${encodeURIComponent(String(item.id || ""))}`;
+  const original = toNumber(item.original, 0);
+  const price = toNumber(item.price, 0);
+  const discount = toNumber(item.discount, 0);
+  const dealLabel = item.crossSellLabel || item.offerLabel || (discount > 0 ? `${discount}% off` : "");
   return `
     <div class="routine-step">
       <a class="mini-media routine-step-media" href="${href}" aria-label="${escapeHtml(item.title)}">
@@ -3030,7 +3144,11 @@ function routineStep(label, item) {
       <div>
         <span class="routine-step-label">${escapeHtml(label)}</span>
         <h4><a class="routine-step-title-link" href="${href}">${escapeHtml(item.title)}</a></h4>
-        <p>${escapeHtml(item.brand || "Pajulina")} · ${formatPrice(item.price, item.currency)}</p>
+        <p>
+          ${escapeHtml(item.brand || "Pajulina")} · ${formatPrice(price, item.currency)}
+          ${original && original > price ? `<s>${formatPrice(original, item.currency)}</s>` : ""}
+          ${dealLabel ? `<em>${escapeHtml(dealLabel)}</em>` : ""}
+        </p>
       </div>
     </div>
   `;
@@ -4589,6 +4707,7 @@ async function renderProductPage(productId) {
     els,
     getProductById,
     fetchXapiProductDetail,
+    ensureProductsForPage,
     productNeedsStorefrontDetail,
     renderLiveCatalogEmptyState,
     ensureShopTransportationsLoaded,
@@ -4668,7 +4787,6 @@ async function renderBlogArticlePage(articleId) {
             ${article.author ? `<span>${escapeHtml(article.author)}</span>` : ""}
           </div>
           <h1>${escapeHtml(article.title)}</h1>
-          ${article.description ? `<p>${escapeHtml(article.description)}</p>` : ""}
         </header>
         ${renderBlogImage(article, "blog-article-media")}
         <div class="blog-article-body">
