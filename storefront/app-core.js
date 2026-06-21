@@ -1,11 +1,11 @@
 import { selldoneImagePathToUrl } from "/dashboard/features/selldone-images.js?v=storefront-cart-image-20260614b";
-import { renderHomePage as renderHomePageModule } from "./home-page.js?v=storefront-profile-color-swatch-20260621";
-import { renderProductPage as renderProductPageModule } from "./product-page.js?v=storefront-profile-color-swatch-20260621";
-import { renderUserMenu } from "./user-menu.js?v=storefront-profile-color-swatch-20260621";
-import { renderAccountProfileOverviewPage } from "./account-profile.js?v=storefront-profile-color-swatch-20260621";
-import { renderOrderHistoryPage } from "./order-history.js?v=storefront-profile-color-swatch-20260621";
-import { renderOrderDetailPage } from "./order-detail.js?v=storefront-profile-color-swatch-20260621";
-import { createStorefrontPayments } from "./payments.js?v=storefront-profile-color-swatch-20260621";
+import { renderHomePage as renderHomePageModule } from "./home-page.js?v=storefront-magazine-real-photos-20260621";
+import { renderProductPage as renderProductPageModule } from "./product-page.js?v=storefront-magazine-real-photos-20260621";
+import { renderUserMenu } from "./user-menu.js?v=storefront-magazine-real-photos-20260621";
+import { renderAccountProfileOverviewPage } from "./account-profile.js?v=storefront-magazine-real-photos-20260621";
+import { renderOrderHistoryPage } from "./order-history.js?v=storefront-magazine-real-photos-20260621";
+import { renderOrderDetailPage } from "./order-detail.js?v=storefront-magazine-real-photos-20260621";
+import { createStorefrontPayments } from "./payments.js?v=storefront-magazine-real-photos-20260621";
 
 const SPRITE_COLUMNS = 4;
 const SPRITE_ROWS = 4;
@@ -2950,10 +2950,11 @@ function featureCard(title, body, pos) {
   `;
 }
 
-function storyCard(title, body, pos, tall = false) {
+function storyCard(title, body, pos, tall = false, image = "") {
+  const imageStyle = image ? `--story-image:url('${escapeHtml(image)}');` : "";
   return `
     <article class="story-card">
-      <div class="story-image ${tall ? "tall" : ""}" style="--hero-pos:${pos}"></div>
+      <div class="story-image ${tall ? "tall" : ""}" style="--hero-pos:${pos};${imageStyle}"></div>
       <h3>${escapeHtml(title)}</h3>
       <p>${escapeHtml(body)}</p>
     </article>

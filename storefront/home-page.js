@@ -80,6 +80,19 @@ export function renderHomePage(deps) {
   const today = homeDeals(products, 6, 4);
   const recommended = homeRecommended(products, 4);
   const newItems = homeNewProducts(products, 4);
+  const categoryCards = getCategoryCards();
+  const homeCreativeImages = {
+    routine: "assets/home-routine-treat.svg",
+    fragrant: "assets/home-most-fragrant.svg",
+    detector: "assets/home-detector-mode.svg",
+    glow: "assets/home-glow-worthy.svg",
+  };
+  const magazineImages = {
+    pride: "assets/home-magazine-pride.png",
+    muse: "assets/home-magazine-muse.png",
+    community: "assets/home-magazine-community.png",
+    giftCard: "assets/home-magazine-gift-card.png",
+  };
 
   els.app.innerHTML = `
     <div class="page-shell">
@@ -127,15 +140,12 @@ export function renderHomePage(deps) {
       <section class="section">
         <div class="section-head">
           <div>
-            <h2>The beauty everyone wants, only here</h2>
-            <p>Curated edits for color, care, fragrance, and tools.</p>
+            <h2>Shop by category</h2>
+            <p>Explore Pajulina Beauty categories with their storefront images.</p>
           </div>
         </div>
-        <div class="feature-grid">
-          ${featureCard("Pajulina Beauty Collection", "Clean color and easy everyday shine.", "12% 55%")}
-          ${featureCard("DIBS Beauty", "Cool girl color for lips and cheeks.", "35% 45%")}
-          ${featureCard("Live Tinted", "Skin-first makeup for warm radiance.", "58% 48%")}
-          ${featureCard("isima", "Hair care made for bounce and shine.", "80% 48%")}
+        <div class="category-grid category-grid--home">
+          ${categoryCards.map(([key, label, image]) => categoryCard(key, label, image)).join("")}
         </div>
       </section>
 
@@ -158,10 +168,10 @@ export function renderHomePage(deps) {
             <h2>Worth the obsession</h2>
             <a class="text-link" href="#shop">Shop now</a>
           </div>
-          ${storyCard("A routine that feels like a treat", "Skin care favorites for fresh starts.", "24% 52%")}
-          ${storyCard("Most fragrant", "Easy scents for day and night.", "50% 52%")}
-          ${storyCard("Detector mode", "Find color, texture, and glow in one place.", "66% 48%")}
-          ${storyCard("Glow-worthy acts", "Care picks that keep skin feeling soft.", "85% 48%")}
+          ${storyCard("A routine that feels like a treat", "Skin care favorites for fresh starts.", "50% 50%", false, homeCreativeImages.routine)}
+          ${storyCard("Most fragrant", "Easy scents for day and night.", "50% 50%", false, homeCreativeImages.fragrant)}
+          ${storyCard("Detector mode", "Find color, texture, and glow in one place.", "50% 50%", false, homeCreativeImages.detector)}
+          ${storyCard("Glow-worthy acts", "Care picks that keep skin feeling soft.", "50% 50%", false, homeCreativeImages.glow)}
         </div>
       </section>
 
@@ -179,22 +189,13 @@ export function renderHomePage(deps) {
 
       <section class="section">
         <div class="section-head">
-          <h2>Shop by Category</h2>
-        </div>
-        <div class="category-grid">
-          ${getCategoryCards().map(([key, label, image]) => categoryCard(key, label, image)).join("")}
-        </div>
-      </section>
-
-      <section class="section">
-        <div class="section-head">
           <h2>All things Pajulina Beauty</h2>
         </div>
         <div class="magazine-row">
-          ${storyCard("Pride, Amplified", "Joyful color made for every day.", "18% 52%", true)}
-          ${storyCard("Apply to be a part of the 2026 Muse cohort", "Creators, artists, and beauty voices.", "42% 50%", true)}
-          ${storyCard("Join the Pajulina Beauty Community today", "Tips, events, and new favorites.", "60% 50%", true)}
-          ${storyCard("Give a Pajulina Beauty gift card", "The easiest gift for every routine.", "86% 45%", true)}
+          ${storyCard("Pride, Amplified", "Joyful color made for every day.", "50% 50%", true, magazineImages.pride)}
+          ${storyCard("Apply to be a part of the 2026 Muse cohort", "Creators, artists, and beauty voices.", "50% 50%", true, magazineImages.muse)}
+          ${storyCard("Join the Pajulina Beauty Community today", "Tips, events, and new favorites.", "50% 50%", true, magazineImages.community)}
+          ${storyCard("Give a Pajulina Beauty gift card", "The easiest gift for every routine.", "50% 50%", true, magazineImages.giftCard)}
         </div>
       </section>
     </div>

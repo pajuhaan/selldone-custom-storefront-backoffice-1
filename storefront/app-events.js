@@ -1,4 +1,4 @@
-import * as storefront from "./app-core.js?v=storefront-profile-color-swatch-20260621";
+import * as storefront from "./app-core.js?v=storefront-magazine-real-photos-20260621";
 
 const {
   state,

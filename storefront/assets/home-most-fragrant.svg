@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 560" role="img" aria-label="Fragrance night notes illustration">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#16082d"/><stop offset="0.55" stop-color="#5b1d86"/><stop offset="1" stop-color="#ff6fb1"/></linearGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#d7fbff" stop-opacity="0.9"/><stop offset="1" stop-color="#ffbbef" stop-opacity="0.94"/></linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="12" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="20" stdDeviation="22" flood-color="#000" flood-opacity="0.32"/></filter>
+  </defs>
+  <rect width="900" height="560" fill="url(#bg)"/>
+  <circle cx="670" cy="126" r="132" fill="#ffcf5d" opacity="0.24" filter="url(#glow)"/>
+  <circle cx="180" cy="402" r="174" fill="#00e5d0" opacity="0.14" filter="url(#glow)"/>
+  <path d="M0 436c164-66 315-66 454 0s293 71 446 2v122H0Z" fill="#0b0320" opacity="0.46"/>
+  <g filter="url(#shadow)">
+    <rect x="370" y="162" width="170" height="252" rx="54" fill="url(#glass)"/>
+    <rect x="412" y="96" width="86" height="84" rx="28" fill="#f3d9ff"/>
+    <rect x="395" y="78" width="120" height="36" rx="18" fill="#1d1536"/>
+    <circle cx="455" cy="288" r="50" fill="#5a1d85" opacity="0.42"/>
+    <path d="M410 350c28 18 62 18 92 0" fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round" opacity="0.76"/>
+  </g>
+  <g fill="none" stroke-linecap="round" filter="url(#glow)">
+    <path d="M212 160c86-74 138-20 96 46-42 68 28 94 82 46" stroke="#f8d75f" stroke-width="8" opacity="0.72"/>
+    <path d="M594 278c78-86 152-66 156 26" stroke="#75fff2" stroke-width="7" opacity="0.78"/>
+    <path d="M186 318c56-40 110-24 132 38" stroke="#ff8ed2" stroke-width="7" opacity="0.82"/>
+  </g>
+  <g fill="#ffffff" opacity="0.92"><path d="M748 78l12 28 29 12-29 12-12 29-12-29-30-12 30-12 12-28Z"/><circle cx="250" cy="96" r="8"/><circle cx="690" cy="366" r="7"/><circle cx="326" cy="432" r="5"/></g>
+</svg>
