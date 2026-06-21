@@ -179,13 +179,14 @@ export function renderProductCommentsSection(options = {}) {
   const hasComments = orderedReviewCards.length > 0;
   const ownCommentReview = orderedReviewCards.find((review) => reviewBelongsToCurrentUser(review, belongsOptions) && String(review?.comment || "").trim());
   const hasOwnComment = Boolean(ownCommentReview || String(ownReviewComment || "").trim());
+  const ownCommentId = String(firstNonNull(ownCommentReview?.id, item?.myReview?.id, item?.myReview?.comment_id, item?.myReview?.commentId, "") || "").trim();
   const commentComposerMarkup = `
     <button type="button" class="comment-composer-card" data-edit-my-review="${escapeHtml(commentEditorId)}" aria-expanded="false">
       <span>${hasOwnComment ? '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M4 20h4.3L19.1 9.2l-4.3-4.3L4 15.7V20Zm2-3.5 8.8-8.8 1.5 1.5L7.5 18H6v-1.5ZM16 3.7l4.3 4.3 1.2-1.2a2 2 0 0 0 0-2.8L20 2.5a2 2 0 0 0-2.8 0L16 3.7Z" /></svg>' : "+"}</span>
       <strong>${hasOwnComment ? "Edit my comment" : "Click to leave a comment .."}</strong>
       <small>${hasOwnComment ? "Update your previous product comment." : "One comment per product. Edit your previous comment when needed."}</small>
     </button>
-    <form id="${escapeHtml(commentEditorId)}" class="comment-editor-form" data-product-review-form data-review-mode="comment" data-product-review-product="${escapeHtml(item.id)}" data-product-can-rate="0" hidden>
+    <form id="${escapeHtml(commentEditorId)}" class="comment-editor-form" data-product-review-form data-review-mode="comment" data-product-review-product="${escapeHtml(item.id)}" data-product-review-comment-id="${escapeHtml(ownCommentId)}" data-product-can-rate="0" hidden>
       <label class="review-text-field">
         Comment
         <textarea name="comment" rows="5" required placeholder="Write your experience with this product">${ownReviewComment ? escapeHtml(ownReviewComment) : ""}</textarea>
@@ -253,10 +254,12 @@ export function renderProductCommentsSection(options = {}) {
                       <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M4 20h4.3L19.1 9.2l-4.3-4.3L4 15.7V20Zm2-3.5 8.8-8.8 1.5 1.5L7.5 18H6v-1.5ZM16 3.7l4.3 4.3 1.2-1.2a2 2 0 0 0 0-2.8L20 2.5a2 2 0 0 0-2.8 0L16 3.7Z" /></svg>
                       <span>Edit</span>
                     </button>
-                    <button type="button" class="review-card-action review-card-action-delete" data-delete-my-review="${escapeHtml(commentEditorId)}" aria-label="Delete my comment" title="Delete comment">
-                      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M8 21a2 2 0 0 1-2-2V8H5a1 1 0 0 1 0-2h4V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1h4a1 1 0 1 1 0 2h-1v11a2 2 0 0 1-2 2H8Zm3-15h2V5h-2v1Zm-3 2v11h8V8H8Zm2 2h2v7h-2v-7Zm4 0h2v7h-2v-7Z" /></svg>
-                      <span>Delete</span>
-                    </button>
+                    ${review.id ? `
+                      <button type="button" class="review-card-action review-card-action-delete" data-delete-my-review data-delete-review-product="${escapeHtml(item.id)}" data-delete-review-comment-id="${escapeHtml(review.id)}" aria-label="Delete my comment" title="Delete comment">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M8 21a2 2 0 0 1-2-2V8H5a1 1 0 0 1 0-2h4V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1h4a1 1 0 1 1 0 2h-1v11a2 2 0 0 1-2 2H8Zm3-15h2V5h-2v1Zm-3 2v11h8V8H8Zm2 2h2v7h-2v-7Zm4 0h2v7h-2v-7Z" /></svg>
+                        <span>Delete</span>
+                      </button>
+                    ` : ""}
                   ` : ""}
                 </div>
               </div>

@@ -3717,6 +3717,7 @@ async function handleProductReviewSubmit(event) {
     showToast("Product ID unknown.");
     return;
   }
+  const commentId = String(form.dataset.productReviewCommentId || "").trim();
 
   if (!state.sessionAuthenticated) {
     await fetchSessionStatus(true);
@@ -3770,8 +3771,9 @@ async function handleProductReviewSubmit(event) {
       const body = { mode: reviewMode };
       if (selectedRatingEntries.length) body.user_rating = userRating;
       if (comment) body.comment = comment;
+      if (commentId) body.comment_id = commentId;
       const response = await fetch(`/api/storefront/products/${encodeURIComponent(productId)}/reviews`, {
-        method: "POST",
+        method: reviewMode === "comment" && commentId ? "PATCH" : "POST",
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",
@@ -3803,7 +3805,7 @@ async function handleProductReviewSubmit(event) {
     } else {
       await fetchXapiProductDetail(productId).catch(() => null);
     }
-    showToast(reviewMode === "rating" ? "Thanks! Your rating was sent to Selldone." : "Thanks! Your comment was sent to Selldone.");
+    showToast(reviewMode === "rating" ? "Thanks! Your rating was sent to Selldone." : commentId ? "Your comment was updated in Selldone." : "Thanks! Your comment was sent to Selldone.");
     form.reset();
     void renderProductPage(productId);
   } catch (error) {
@@ -3820,6 +3822,72 @@ async function handleProductReviewSubmit(event) {
         submitButton.setAttribute("disabled", "disabled");
       }
     }
+  }
+}
+
+async function handleProductReviewDelete(control) {
+  const button = control?.target?.closest?.("[data-delete-my-review]") || control;
+  if (!button) return;
+  const productId = String(button.dataset.deleteReviewProduct || state.activeProductId || "").trim();
+  const commentId = String(button.dataset.deleteReviewCommentId || "").trim();
+  if (!productId || !commentId) {
+    showToast("Comment ID unknown.");
+    return;
+  }
+
+  if (!state.sessionAuthenticated) {
+    await fetchSessionStatus(true);
+    if (!state.sessionAuthenticated) {
+      showToast("Please log in before deleting your comment.");
+      navigateToAccount();
+      return;
+    }
+  }
+
+  if (!window.confirm("Delete your comment? This cannot be undone.")) return;
+
+  button.disabled = true;
+  const previousText = button.textContent;
+  button.textContent = "Deleting...";
+  try {
+    const response = await fetch(`/api/storefront/products/${encodeURIComponent(productId)}/reviews`, {
+      method: "DELETE",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ comment_id: commentId }),
+    }).catch(() => null);
+    const result = await response?.json().catch(() => ({}));
+    if (!response || !response.ok || result?.ok === false) {
+      const responseMessage = String(result?.error || result?.message || "").trim();
+      if (response?.status === 401 || /authentication required/i.test(responseMessage)) {
+        showToast(responseMessage || "Please log in before deleting your comment.");
+        navigateToAccount();
+        return;
+      }
+      throw new Error(responseMessage || extractStorefrontErrorMessage(result, response?.status || 0) || "Selldone XAPI did not delete this comment.");
+    }
+
+    const product = getProductById(productId);
+    const reviewData = await fetchXapiProductReviews(productId).catch(() => null);
+    if (reviewData && product) {
+      applyProductReviewPayloadToProduct(product, reviewData);
+    } else {
+      await fetchXapiProductDetail(productId).catch(() => null);
+    }
+    if (product) {
+      product.myReview = null;
+      product.reviewsList = Array.isArray(product.reviewsList)
+        ? product.reviewsList.filter((review) => String(firstNonNull(review?.id, review?.comment_id, review?.commentId, "") || "").trim() !== commentId)
+        : [];
+    }
+    showToast("Your comment was deleted from Selldone.");
+    void renderProductPage(productId);
+  } catch (error) {
+    showToast(error?.message || "Could not delete your comment right now.");
+    button.disabled = false;
+    button.textContent = previousText;
   }
 }
 
@@ -5946,6 +6014,7 @@ export {
   getItemVariants,
   getProductById,
   handleCheckoutSubmit,
+  handleProductReviewDelete,
   handleProductReviewSubmit,
   handleQuickBuySubmit,
   initializeStorefrontSession,

@@ -74,10 +74,24 @@ export async function handleStorefrontApi(req, res, url, storefrontSession = nul
       return true;
     }
 
+    if (req.method === "PATCH" || req.method === "PUT") {
+      const payload = await readJsonBody(req).catch(() => ({}));
+      const result = await updateStorefrontProductComment(productReviewsProductId, storefrontSession, payload);
+      sendJson(res, result.ok ? 200 : result.status || 502, result);
+      return true;
+    }
+
+    if (req.method === "DELETE") {
+      const payload = await readJsonBody(req).catch(() => ({}));
+      const result = await deleteStorefrontProductComment(productReviewsProductId, storefrontSession, payload);
+      sendJson(res, result.ok ? 200 : result.status || 502, result);
+      return true;
+    }
+
     sendJson(res, 405, {
       ok: false,
       source: "storefront_product_reviews",
-      error: "Product reviews endpoint accepts only GET and POST requests.",
+      error: "Product reviews endpoint accepts only GET, POST, PATCH, PUT, and DELETE requests.",
       method: req.method,
     });
     return true;
@@ -1418,6 +1432,110 @@ async function submitStorefrontProductCommentOnly(productId, storefrontSession, 
     status: result.status || 502,
     endpoint: result.endpoint,
     error: result.error || "Selldone product article comment submit request failed.",
+    payload: result.payload,
+  };
+}
+
+async function updateStorefrontProductComment(productId, storefrontSession, payload = {}) {
+  const safeId = String(productId || "").trim();
+  const commentId = String(firstNonNull(payload?.comment_id, payload?.commentId, payload?.review_id, payload?.reviewId, "") || "").trim();
+  const comment = String(firstNonNull(payload?.comment, payload?.text, payload?.body, "") || "").trim();
+  if (!safeId || !commentId) {
+    return {
+      ok: false,
+      source: "storefront_product_comment_update",
+      status: 400,
+      error: "Product ID and comment ID are required to update a Selldone product comment.",
+    };
+  }
+  if (!comment) {
+    return {
+      ok: false,
+      source: "storefront_product_comment_update",
+      status: 422,
+      error: "Comment body is required to update a Selldone product comment.",
+    };
+  }
+
+  const token = await ensureStorefrontToken(storefrontSession);
+  if (!token) {
+    return {
+      ok: false,
+      source: "storefront_product_comment_update",
+      status: 401,
+      error: "Authentication required to update a Selldone product comment.",
+    };
+  }
+
+  const endpoint = new URL(`${STOREFRONT_XAPI_BASE}/comment/${encodeURIComponent(commentId)}`);
+  const result = await requestStorefrontAuthorizedEndpoint(token, endpoint, {
+    method: "PUT",
+    label: "product-article-comment-update",
+    body: { body: comment },
+  });
+  if (result.ok) {
+    return {
+      ok: true,
+      source: "storefront_product_comment_update",
+      status: result.status,
+      endpoint: result.endpoint,
+      payload: result.payload,
+    };
+  }
+
+  return {
+    ok: false,
+    source: "storefront_product_comment_update",
+    status: result.status || 502,
+    endpoint: result.endpoint,
+    error: result.error || "Selldone product article comment update request failed.",
+    payload: result.payload,
+  };
+}
+
+async function deleteStorefrontProductComment(productId, storefrontSession, payload = {}) {
+  const safeId = String(productId || "").trim();
+  const commentId = String(firstNonNull(payload?.comment_id, payload?.commentId, payload?.review_id, payload?.reviewId, "") || "").trim();
+  if (!safeId || !commentId) {
+    return {
+      ok: false,
+      source: "storefront_product_comment_delete",
+      status: 400,
+      error: "Product ID and comment ID are required to delete a Selldone product comment.",
+    };
+  }
+
+  const token = await ensureStorefrontToken(storefrontSession);
+  if (!token) {
+    return {
+      ok: false,
+      source: "storefront_product_comment_delete",
+      status: 401,
+      error: "Authentication required to delete a Selldone product comment.",
+    };
+  }
+
+  const endpoint = new URL(`${STOREFRONT_XAPI_BASE}/comment/${encodeURIComponent(commentId)}`);
+  const result = await requestStorefrontAuthorizedEndpoint(token, endpoint, {
+    method: "DELETE",
+    label: "product-article-comment-delete",
+  });
+  if (result.ok) {
+    return {
+      ok: true,
+      source: "storefront_product_comment_delete",
+      status: result.status,
+      endpoint: result.endpoint,
+      payload: result.payload,
+    };
+  }
+
+  return {
+    ok: false,
+    source: "storefront_product_comment_delete",
+    status: result.status || 502,
+    endpoint: result.endpoint,
+    error: result.error || "Selldone product article comment delete request failed.",
     payload: result.payload,
   };
 }

@@ -16,6 +16,7 @@ const {
   getItemVariants,
   getProductById,
   handleCheckoutSubmit,
+  handleProductReviewDelete,
   handleProductReviewSubmit,
   handleQuickBuySubmit,
   initializeStorefrontSession,
@@ -127,6 +128,13 @@ export function registerStorefrontInteractions() {
         updateProductRatingSubmitState(reviewForm);
         reviewForm.querySelector('textarea[name="comment"], [data-rating-input]:not(:disabled)')?.focus();
       }
+      return;
+    }
+
+    const deleteMyReviewControl = event.target.closest("[data-delete-my-review]");
+    if (deleteMyReviewControl) {
+      event.preventDefault();
+      void handleProductReviewDelete(deleteMyReviewControl);
       return;
     }
 
