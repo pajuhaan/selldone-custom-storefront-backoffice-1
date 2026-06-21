@@ -1,3 +1,15 @@
+const favoriteStorageKey = "pajulina:favorites";
+
+function productIsFavorite(productId = "") {
+  try {
+    const raw = window.localStorage?.getItem(favoriteStorageKey);
+    const ids = JSON.parse(raw || "[]");
+    return Array.isArray(ids) && ids.map(String).includes(String(productId));
+  } catch {
+    return false;
+  }
+}
+
 export async function renderProductPage(deps) {
   const {
     productId,
@@ -100,6 +112,7 @@ export async function renderProductPage(deps) {
   const similar = catalog.filter((entry) => entry.subcategory === subcategory && entry.id !== item.id).slice(0, 4);
 
   const catalogItem = (index, alternate = null) => catalog[index] || alternate || null;
+  const isFavorite = productIsFavorite(item.id);
 
   els.app.innerHTML = `
     <div class="page-shell">
@@ -108,6 +121,19 @@ export async function renderProductPage(deps) {
       </nav>
       <section class="product-detail-layout">
         <div class="gallery">
+          <button
+            class="favorite-button product-favorite-overlay ${isFavorite ? "is-active" : ""}"
+            type="button"
+            data-favorite-product="${escapeHtml(item.id)}"
+            data-favorite-title="${escapeHtml(item.title || "Product")}"
+            aria-pressed="${isFavorite ? "true" : "false"}"
+            aria-label="${isFavorite ? "Remove from favorites" : "Add to favorites"}"
+            title="${isFavorite ? "Remove from favorites" : "Add to favorites"}"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M20.8 4.6a5.4 5.4 0 0 0-7.6 0L12 5.8l-1.2-1.2a5.4 5.4 0 1 0-7.6 7.6L12 21l8.8-8.8a5.4 5.4 0 0 0 0-7.6Z" />
+            </svg>
+          </button>
           <div class="gallery-main">
             ${renderProductImage(item, "large-sprite", state.activeMedia)}
             <button class="try-on" type="button">TRY IT ON</button>
@@ -147,12 +173,14 @@ export async function renderProductPage(deps) {
 
           <div class="detail-actions">
             <button class="black-button" type="button" data-add-to-cart-product="${item.id}" data-variant-key="${escapeHtml(addButtonVariantKey)}">Add to bag</button>
-            <button class="favorite-button" type="button" aria-label="Add to favorites">
+            <button class="quick-buy-trigger" type="button" data-quick-buy-product="${item.id}" data-variant-key="${escapeHtml(addButtonVariantKey)}">
               <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M20.8 4.6a5.4 5.4 0 0 0-7.6 0L12 5.8l-1.2-1.2a5.4 5.4 0 1 0-7.6 7.6L12 21l8.8-8.8a5.4 5.4 0 0 0 0-7.6Z" />
+                <path d="M13 2 5 13h6l-1 9 9-12h-6l1-8Z" />
               </svg>
+              <span>Buy now</span>
             </button>
           </div>
+          <div data-quick-buy-mount></div>
           <div class="promo-box">
             Members save up to 20% on almost everything in stores and online. Use code <strong>NEWROUTINE</strong>.
           </div>

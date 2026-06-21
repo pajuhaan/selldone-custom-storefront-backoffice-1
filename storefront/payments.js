@@ -5,6 +5,8 @@ export function createStorefrontPayments({
   escapeHtml,
   showToast,
   renderLiveCatalogEmptyState,
+  checkoutSuccessUrl = null,
+  onPaymentComplete = null,
 }) {
   let stripeJsPromise = null;
 
@@ -276,6 +278,7 @@ export function createStorefrontPayments({
 
     state.stripeLoading = true;
     showToast("Opening Stripe payment...");
+    if (typeof checkoutSuccessUrl === "function") checkoutSuccessUrl(result, requestPayload);
     const Stripe = await loadStripeJs();
     const stripe = Stripe(publishableKey);
 
@@ -304,11 +307,14 @@ export function createStorefrontPayments({
     const app = document.getElementById("app");
     if (!app) return false;
 
-    const returnUrl = `${window.location.origin}${window.location.pathname}${window.location.search || ""}#account/orders`;
+    const returnUrl = (typeof checkoutSuccessUrl === "function" ? checkoutSuccessUrl(result, requestPayload) : "")
+      || String(requestPayload.return_url || "").trim()
+      || `${window.location.origin}${window.location.pathname}${window.location.search || ""}#account/orders`;
+    const backUrl = String(requestPayload.back_url || "").trim() || "#checkout";
     app.innerHTML = `
       <div class="page-shell">
         <nav class="breadcrumbs" aria-label="Payment path">
-          <a href="#checkout">Checkout</a><span>/</span><strong>Secure payment</strong>
+          <a href="${escapeHtml(backUrl)}">Checkout</a><span>/</span><strong>Secure payment</strong>
         </nav>
         <section class="section stripe-payment-page">
           <div class="stripe-payment-shell">
@@ -328,7 +334,7 @@ export function createStorefrontPayments({
               <button class="black-button stripe-payment-submit" type="submit" data-stripe-payment-submit>
                 Pay securely
               </button>
-              <a class="text-link" href="#checkout">Back to checkout</a>
+              <a class="text-link" href="${escapeHtml(backUrl)}">Back to checkout</a>
             </form>
           </div>
         </section>
@@ -393,6 +399,10 @@ export function createStorefrontPayments({
 
       const status = paymentIntent?.status || "processing";
       showToast(`Stripe payment ${status}.`);
+      if (status === "succeeded" && typeof onPaymentComplete === "function") {
+        await onPaymentComplete(result, requestPayload, paymentIntent);
+        return;
+      }
       renderLiveCatalogEmptyState(
         status === "succeeded" ? "Payment completed" : "Payment processing",
         status === "succeeded"

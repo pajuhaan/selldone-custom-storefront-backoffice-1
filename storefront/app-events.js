@@ -1,4 +1,4 @@
-import * as storefront from "./app-core.js?v=storefront-magazine-real-photos-20260621";
+import * as storefront from "./app-core.js?v=storefront-order-success-flow-20260621";
 
 const {
   state,
@@ -8,21 +8,25 @@ const {
   closeAccountMenu,
   closeCart,
   closeCategoryMenu,
+  closeQuickBuy,
   closeMobileMenu,
   fetchSessionStatus,
   firstNonNull,
   getItemVariants,
   getProductById,
   handleCheckoutSubmit,
+  handleQuickBuySubmit,
   initializeStorefrontSession,
   navigateToAccount,
   openCart,
   openCategoryMenu,
+  openQuickBuy,
   parseHash,
   renderCart,
   renderCheckoutPage,
   renderProductImage,
   renderProductPage,
+  refreshQuickBuy,
   renderShopPage,
   selectProductVariantOption,
   route,
@@ -30,13 +34,60 @@ const {
   setCartQuantity,
   setHash,
   setHeroSlide,
+  setQuickBuyAddressIndex,
   shadeName,
   showToast,
+  toggleQuickBuyAddressEditing,
   toggleAccountMenu,
   updateAccountButton,
+  updateQuickBuyQuantity,
   updateQuantity,
   normalizeGallery,
 } = storefront;
+
+const favoriteStorageKey = "pajulina:favorites";
+
+function readFavoriteIds() {
+  try {
+    const raw = window.localStorage?.getItem(favoriteStorageKey);
+    const ids = JSON.parse(raw || "[]");
+    return Array.isArray(ids) ? ids.map(String).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeFavoriteIds(ids = []) {
+  try {
+    window.localStorage?.setItem(favoriteStorageKey, JSON.stringify([...new Set(ids.map(String).filter(Boolean))]));
+  } catch {
+    // Ignore storage access errors in private or restricted browser modes.
+  }
+}
+
+function setFavoriteButtonState(button, isActive) {
+  button.classList.toggle("is-active", isActive);
+  button.setAttribute("aria-pressed", isActive ? "true" : "false");
+  button.setAttribute("aria-label", isActive ? "Remove from favorites" : "Add to favorites");
+  button.setAttribute("title", isActive ? "Remove from favorites" : "Add to favorites");
+}
+
+function syncFavoriteButtons(productId = "", isActive = false) {
+  document.querySelectorAll(`[data-favorite-product="${CSS.escape(String(productId))}"]`).forEach((button) => {
+    setFavoriteButtonState(button, isActive);
+  });
+}
+
+function toggleFavoriteProduct(productId = "") {
+  const id = String(productId || "").trim();
+  if (!id) return false;
+  const ids = readFavoriteIds();
+  const exists = ids.includes(id);
+  const next = exists ? ids.filter((entry) => entry !== id) : [...ids, id];
+  writeFavoriteIds(next);
+  syncFavoriteButtons(id, !exists);
+  return !exists;
+}
 
 export function registerStorefrontInteractions() {
   document.addEventListener("click", (event) => {
@@ -79,6 +130,44 @@ export function registerStorefrontInteractions() {
     const heroSlide = event.target.closest("[data-hero-slide]");
     if (heroSlide) {
       setHeroSlide(Number(heroSlide.dataset.heroSlide));
+      return;
+    }
+
+    const favoriteButton = event.target.closest("[data-favorite-product]");
+    if (favoriteButton) {
+      event.preventDefault();
+      const isActive = toggleFavoriteProduct(favoriteButton.dataset.favoriteProduct);
+      const title = favoriteButton.dataset.favoriteTitle || "Product";
+      showToast(isActive ? `${title} added to favorites.` : `${title} removed from favorites.`);
+      return;
+    }
+
+    const quickBuyButton = event.target.closest("[data-quick-buy-product]");
+    if (quickBuyButton) {
+      event.preventDefault();
+      void openQuickBuy(quickBuyButton.dataset.quickBuyProduct, quickBuyButton.dataset.variantKey || "");
+      return;
+    }
+
+    if (event.target.closest("[data-quick-buy-close]")) {
+      closeQuickBuy();
+      return;
+    }
+
+    const quickBuyQty = event.target.closest("[data-quick-buy-qty]");
+    if (quickBuyQty) {
+      void updateQuickBuyQuantity(Number(quickBuyQty.dataset.quickBuyQty || 0));
+      return;
+    }
+
+    const quickBuyAddress = event.target.closest("[data-quick-buy-address-index]");
+    if (quickBuyAddress) {
+      void setQuickBuyAddressIndex(quickBuyAddress.dataset.quickBuyAddressIndex);
+      return;
+    }
+
+    if (event.target.closest("[data-quick-buy-address-edit]")) {
+      void toggleQuickBuyAddressEditing();
       return;
     }
 
@@ -174,6 +263,12 @@ export function registerStorefrontInteractions() {
       const productId = deliveryOption.dataset.deliveryProduct;
       const key = deliveryOption.dataset.deliveryKey || "";
       if (!key) return;
+
+      if (context === "quick-buy" && productId) {
+        state.activeProductShippingSelection[String(productId)] = key;
+        void refreshQuickBuy();
+        return;
+      }
 
       if (productId) {
         state.activeProductShippingSelection[String(productId)] = key;
@@ -420,6 +515,13 @@ export function registerStorefrontInteractions() {
   });
 
   document.addEventListener("submit", (event) => {
+    const quickBuyForm = event.target.closest("[data-quick-buy-form]");
+    if (quickBuyForm) {
+      event.preventDefault();
+      void handleQuickBuySubmit(event);
+      return;
+    }
+
     const checkoutForm = event.target.closest("[data-checkout-form]");
     if (!checkoutForm) return;
     event.preventDefault();
@@ -430,6 +532,7 @@ export function registerStorefrontInteractions() {
   window.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       closeCart();
+      closeQuickBuy();
       closeCategoryMenu();
       closeMobileMenu();
       closeAccountMenu();

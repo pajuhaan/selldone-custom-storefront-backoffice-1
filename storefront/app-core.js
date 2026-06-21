@@ -1,11 +1,12 @@
 import { selldoneImagePathToUrl } from "/dashboard/features/selldone-images.js?v=storefront-cart-image-20260614b";
-import { renderHomePage as renderHomePageModule } from "./home-page.js?v=storefront-magazine-real-photos-20260621";
-import { renderProductPage as renderProductPageModule } from "./product-page.js?v=storefront-magazine-real-photos-20260621";
-import { renderUserMenu } from "./user-menu.js?v=storefront-magazine-real-photos-20260621";
-import { renderAccountProfileOverviewPage } from "./account-profile.js?v=storefront-magazine-real-photos-20260621";
-import { renderOrderHistoryPage } from "./order-history.js?v=storefront-magazine-real-photos-20260621";
-import { renderOrderDetailPage } from "./order-detail.js?v=storefront-magazine-real-photos-20260621";
-import { createStorefrontPayments } from "./payments.js?v=storefront-magazine-real-photos-20260621";
+import { renderHomePage as renderHomePageModule } from "./home-page.js?v=storefront-order-success-flow-20260621";
+import { renderProductPage as renderProductPageModule } from "./product-page.js?v=storefront-order-success-flow-20260621";
+import { renderUserMenu } from "./user-menu.js?v=storefront-order-success-flow-20260621";
+import { renderAccountProfileOverviewPage } from "./account-profile.js?v=storefront-order-success-flow-20260621";
+import { renderOrderHistoryPage } from "./order-history.js?v=storefront-order-success-flow-20260621";
+import { renderOrderDetailPage } from "./order-detail.js?v=storefront-order-success-flow-20260621";
+import { createStorefrontPayments } from "./payments.js?v=storefront-order-success-flow-20260621";
+import { createStorefrontQuickBuy } from "./quick-buy.js?v=storefront-order-success-flow-20260621";
 
 const SPRITE_COLUMNS = 4;
 const SPRITE_ROWS = 4;
@@ -124,6 +125,14 @@ const state = {
   pageLoading: false,
   pageLoadingCount: 0,
   checkoutSubmitting: false,
+  quickBuy: {
+    productId: "",
+    variantKey: "",
+    quantity: 1,
+    addressIndex: 0,
+    editingAddress: false,
+    submitting: false,
+  },
   stripeLoading: false,
   cartLoaded: false,
   cartLoading: false,
@@ -2751,7 +2760,7 @@ async function handleCheckoutSubmit(event) {
   const payload = {
     gateway_code: gatewayCode,
     currency,
-    return_url: `${window.location.origin}${window.location.pathname}${window.location.search || ""}#checkout`,
+    return_url: `${window.location.origin}${window.location.pathname}${window.location.search || ""}#order-success`,
     customer: {
       fullName: String(formData.fullName || "").trim(),
       phone: String(formData.phone || "").trim(),
@@ -2846,6 +2855,7 @@ async function handleCheckoutSubmit(event) {
     if (await handleStripeCheckoutResult(result, payload)) return;
 
     if (result.redirect?.url) {
+      checkoutSuccessUrlFor(result, payload);
       showToast("Redirecting to payment...");
       submitRedirectForm(result.redirect.url, result.redirect.method, result.redirect.fields);
       return;
@@ -2865,15 +2875,7 @@ async function handleCheckoutSubmit(event) {
     }
 
     showToast(orderId ? `Order ${orderId} placed successfully` : "Checkout completed");
-    state.cart = {};
-    state.cartSummary = null;
-    state.cartLoaded = false;
-    saveCart();
-    renderCart();
-    state.checkoutSubmitting = false;
-    state.activeCheckoutShippingKey = "";
-    renderLiveCatalogEmptyState("Order placed", orderId ? `Your order ${orderId} has been received. Thank you for shopping with Pajulina.` : "Your order has been received. Thank you for shopping with Pajulina.");
-    setTimeout(() => setHash("shop"), 1000);
+    await completeStorefrontOrder(result, payload);
   } catch (error) {
     state.checkoutSubmitting = false;
     if (submitButton) {
@@ -2940,10 +2942,11 @@ function eventTile(title, body, pos) {
   `;
 }
 
-function featureCard(title, body, pos) {
+function featureCard(title, body, pos, image = "") {
+  const imageStyle = image ? `--story-image:url('${escapeHtml(image)}');` : "";
   return `
     <article class="feature-card">
-      <div class="feature-image" style="--hero-pos:${pos}"></div>
+      <div class="feature-image" style="--hero-pos:${pos};${imageStyle}"></div>
       <h3>${escapeHtml(title)}</h3>
       <p>${escapeHtml(body)}</p>
     </article>
@@ -3340,6 +3343,91 @@ function firstArrayValue(...values) {
   return values.find((value) => Array.isArray(value)) || [];
 }
 
+const ORDER_SUCCESS_STORAGE_KEY = "pajulina:last-checkout-order";
+let orderSuccessCountdownTimer = null;
+
+function checkoutResultOrderId(result = {}, requestPayload = {}, paymentIntent = null) {
+  return String(firstNonNull(
+    result?.orderId,
+    result?.order_id,
+    result?.payment?.target_id,
+    result?.payment?.targetId,
+    result?.payment?.order_id,
+    result?.payment?.orderId,
+    result?.payment?.basket_id,
+    result?.payment?.basketId,
+    result?.basket?.id,
+    result?.basket?.basket_id,
+    result?.basket?.basketId,
+    result?.basket?.code,
+    requestPayload?.order_id,
+    requestPayload?.orderId,
+    requestPayload?.basket_id,
+    requestPayload?.basketId,
+    paymentIntent?.metadata?.order_id,
+    paymentIntent?.metadata?.orderId,
+    paymentIntent?.metadata?.basket_id,
+    paymentIntent?.metadata?.basketId,
+    "",
+  ) || "").trim();
+}
+
+function rememberCheckoutOrder(orderId = "") {
+  const id = String(orderId || "").trim();
+  if (!id) return;
+  try {
+    window.sessionStorage?.setItem(ORDER_SUCCESS_STORAGE_KEY, JSON.stringify({ orderId: id, at: Date.now() }));
+  } catch {
+    // Ignore restricted storage modes.
+  }
+}
+
+function rememberedCheckoutOrderId() {
+  try {
+    const raw = window.sessionStorage?.getItem(ORDER_SUCCESS_STORAGE_KEY) || "";
+    const payload = JSON.parse(raw || "{}");
+    const orderId = String(payload?.orderId || "").trim();
+    const age = Date.now() - Number(payload?.at || 0);
+    return orderId && age < 1000 * 60 * 60 ? orderId : "";
+  } catch {
+    return "";
+  }
+}
+
+function checkoutSuccessUrlFor(result = {}, requestPayload = {}, paymentIntent = null) {
+  const orderId = checkoutResultOrderId(result, requestPayload, paymentIntent);
+  rememberCheckoutOrder(orderId);
+  const query = orderId ? `?order=${encodeURIComponent(orderId)}` : "";
+  return `${window.location.origin}${window.location.pathname}${window.location.search || ""}#order-success${query}`;
+}
+
+function clearOrderSuccessTimer() {
+  if (!orderSuccessCountdownTimer) return;
+  window.clearInterval(orderSuccessCountdownTimer);
+  orderSuccessCountdownTimer = null;
+}
+
+async function completeStorefrontOrder(result = {}, requestPayload = {}, paymentIntent = null) {
+  const orderId = checkoutResultOrderId(result, requestPayload, paymentIntent);
+  rememberCheckoutOrder(orderId);
+  closeCart();
+  state.cart = {};
+  state.cartSummary = null;
+  state.cartLoaded = false;
+  saveCart();
+  renderCart();
+  await hydrateStorefrontCart(true).catch(() => false);
+  state.cart = {};
+  state.cartSummary = null;
+  state.cartLoaded = true;
+  saveCart();
+  renderCart();
+  state.checkoutSubmitting = false;
+  state.activeCheckoutShippingKey = "";
+  setHash("order-success", orderId ? { order: orderId } : null);
+  return true;
+}
+
 const {
   checkoutSubmitLabel,
   handleStripeCheckoutResult,
@@ -3349,6 +3437,52 @@ const {
   firstArrayValue,
   firstNonNull,
   escapeHtml,
+  showToast,
+  renderLiveCatalogEmptyState,
+  checkoutSuccessUrl: checkoutSuccessUrlFor,
+  onPaymentComplete: completeStorefrontOrder,
+});
+
+const {
+  closeQuickBuy,
+  handleQuickBuySubmit,
+  openQuickBuy,
+  refreshQuickBuy,
+  setQuickBuyAddressIndex,
+  toggleQuickBuyAddressEditing,
+  updateQuickBuyQuantity,
+} = createStorefrontQuickBuy({
+  state,
+  DATA_SOURCE,
+  getProductById,
+  fetchXapiProductDetail,
+  fetchSessionStatus,
+  navigateToAccount,
+  addToCart,
+  hydrateStorefrontCart,
+  ensureShopTransportationsLoaded,
+  renderDeliveryCards,
+  transportSelectionKey,
+  resolveCheckoutTransport,
+  calculateTransportCost,
+  activeProductVariant,
+  resolveCartLineVariantForStorefront,
+  resolveStorefrontVariantId,
+  getItemVariants,
+  resolveVariantPrice,
+  resolveVariantOriginalPrice,
+  cartEntries,
+  cartTotalsSummary,
+  formatPrice,
+  renderProductImage,
+  variantDetailsMarkup,
+  renderCheckoutPaymentOptions,
+  handleStripeCheckoutResult,
+  checkoutSuccessUrl: checkoutSuccessUrlFor,
+  completeStorefrontOrder,
+  firstNonNull,
+  escapeHtml,
+  toNumber,
   showToast,
   renderLiveCatalogEmptyState,
 });
@@ -3926,18 +4060,20 @@ function cartEntries() {
     .filter((entry) => entry !== null);
 }
 
-function addToCart(productId, variantKey = "") {
-  return addToCartAsync(productId, variantKey);
+function addToCart(productId, variantKey = "", options = {}) {
+  return addToCartAsync(productId, variantKey, options);
 }
 
-async function addToCartAsync(productId, variantKey = "") {
+async function addToCartAsync(productId, variantKey = "", options = {}) {
+  const openBag = options.openBag !== false;
+  const successToast = typeof options.successToast === "string" ? options.successToast : "Added to bag";
   let itemId = String(productId || "").trim();
   if (!itemId) {
     itemId = String(state.activeProductId || "").trim();
   }
   if (!itemId) {
     showToast("Product ID unknown.");
-    return;
+    return { ok: false };
   }
 
   let item = getProductById(itemId);
@@ -3946,7 +4082,7 @@ async function addToCartAsync(productId, variantKey = "") {
   }
   if (!item) {
     showToast("Product is not available.");
-    return;
+    return { ok: false };
   }
   const resolvedVariant = await resolveCartLineVariantForStorefront(item, variantKey);
   item = resolvedVariant.item || item;
@@ -3968,28 +4104,28 @@ async function addToCartAsync(productId, variantKey = "") {
       variantKey,
     ),
   );
-  if (!lineKey) return;
+  if (!lineKey) return { ok: false };
 
   if (!keyMatched && itemVariants.length > 1) {
     showToast("This selected variant is no longer available. Please reselect an option.");
-    return;
+    return { ok: false };
   }
 
   if (selected && !selectedVariantId && hasVariants) {
     showToast("This selected variant is not valid anymore. Please reselect an option.");
-    return;
+    return { ok: false };
   }
 
   if (hasVariants && selectedVariantId && !isStorefrontVariantIdInList(itemVariants, selectedVariantId)) {
     showToast("This selected variant is not available anymore. Please reselect an option.");
-    return;
+    return { ok: false };
   }
 
   if (!state.sessionAuthenticated) {
     await fetchSessionStatus(true);
     if (!state.sessionAuthenticated) {
       showToast("Please log in before adding to cart.");
-      return;
+      return { ok: false };
     }
   }
 
@@ -3997,7 +4133,7 @@ async function addToCartAsync(productId, variantKey = "") {
     const loaded = await hydrateStorefrontCart(true);
     if (!loaded) {
       showToast(state.cartLoadError || "Could not load your Selldone bag before updating it.");
-      return;
+      return { ok: false };
     }
   }
 
@@ -4012,22 +4148,23 @@ async function addToCartAsync(productId, variantKey = "") {
   if (!mutation.ok) {
     renderCart();
     showToast(mutation.error || "Could not add item to Selldone cart.");
-    return;
+    return { ok: false };
   }
 
   const synced = await applyStorefrontCartMutation(mutation);
   if (!synced) {
     renderCart();
     showToast(state.cartLoadError || "Selldone did not return basket details.");
-    return;
+    return { ok: false };
   }
 
   if (selected) {
     setActiveProductVariantSelection(item.id, selected);
   }
 
-  openCart();
-  showToast("Added to bag");
+  if (openBag) openCart();
+  if (successToast) showToast(successToast);
+  return { ok: true, item, selected, selectedVariantId, lineKey, count: nextCount };
 }
 
 async function setCartQuantity(lineKey, quantity) {
@@ -4397,15 +4534,15 @@ async function renderShopPage() {
           <h1>Pajulina Beauty Collection</h1>
           <p>Cruelty free beauty with clean ingredients, fresh color, and everyday ease.</p>
         </div>
-        <div class="shop-hero-image" role="img" aria-label="Pajulina beauty collection products"></div>
+        <div class="shop-hero-image" style="--shop-hero-image:url('assets/shop-hero-fresh.png')" role="img" aria-label="Pajulina beauty collection products"></div>
       </section>
 
       <section class="section-tight">
         <div class="editorial-row">
-          ${featureCard("Glossy lips, soft cheeks", "Color that feels light and fresh.", "12% 55%")}
-          ${featureCard("Beauty, assembled", "Routine-ready favorites for every bag.", "48% 50%")}
-          ${featureCard("Face the summer", "SPF, tint, and glow for warm days.", "78% 48%")}
-          ${featureCard("Gifts that glow", "Little luxuries, easy to love.", "88% 45%")}
+          ${featureCard("Glossy lips, soft cheeks", "Color that feels light and fresh.", "50% 52%", "assets/shop-glossy-lips.png")}
+          ${featureCard("Beauty, assembled", "Routine-ready favorites for every bag.", "50% 50%", "assets/shop-beauty-assembled.png")}
+          ${featureCard("Face the summer", "SPF, tint, and glow for warm days.", "50% 50%", "assets/shop-face-summer.png")}
+          ${featureCard("Gifts that glow", "Little luxuries, easy to love.", "50% 50%", "assets/shop-gifts-glow.png")}
         </div>
       </section>
 
@@ -4558,8 +4695,70 @@ function renderLiveCatalogEmptyState(title = "Nothing to show", body = "Please t
   `;
 }
 
+async function renderOrderSuccessPage(params = new URLSearchParams()) {
+  clearOrderSuccessTimer();
+  const orderId = String(params.get("order") || params.get("id") || rememberedCheckoutOrderId() || "").trim();
+  if (orderId) rememberCheckoutOrder(orderId);
+
+  closeCart();
+  state.cart = {};
+  state.cartSummary = null;
+  state.cartLoaded = false;
+  saveCart();
+  renderCart();
+  await hydrateStorefrontCart(true).catch(() => false);
+  state.cart = {};
+  state.cartSummary = null;
+  state.cartLoaded = true;
+  saveCart();
+  renderCart();
+
+  let seconds = 5;
+  const detailTarget = orderId ? `#account/orders?detail=${encodeURIComponent(orderId)}` : "#account/orders";
+  els.app.innerHTML = `
+    <div class="page-shell">
+      <nav class="breadcrumbs" aria-label="Order complete path">
+        <a href="#home">Home</a><span>/</span><a href="#account/orders">Orders</a><span>/</span><strong>Completed</strong>
+      </nav>
+      <section class="order-success-page" aria-live="polite">
+        <div class="order-success-card">
+          <span class="order-success-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <path d="M9.2 16.4 4.8 12l-1.5 1.5 5.9 5.9L21 7.6 19.5 6 9.2 16.4Z" />
+            </svg>
+          </span>
+          <span class="account-profile-kicker">Order completed</span>
+          <h1>Payment successful</h1>
+          <p>${orderId ? `Your Selldone order ${escapeHtml(orderId)} is complete.` : "Your Selldone order is complete."}</p>
+          <div class="order-success-countdown">
+            Opening order details in <strong data-order-success-countdown>${seconds}</strong> seconds.
+          </div>
+          <div class="account-profile-actions">
+            <a class="black-button" href="${escapeHtml(detailTarget)}">View order details</a>
+            <a class="text-link" href="#shop">Continue shopping</a>
+          </div>
+        </div>
+      </section>
+    </div>
+  `;
+
+  orderSuccessCountdownTimer = window.setInterval(() => {
+    seconds -= 1;
+    const counter = document.querySelector("[data-order-success-countdown]");
+    if (counter) counter.textContent = String(Math.max(0, seconds));
+    if (seconds > 0) return;
+    clearOrderSuccessTimer();
+    if (orderId) {
+      setHash("account/orders", { detail: orderId });
+      return;
+    }
+    setHash("account/orders");
+  }, 1000);
+}
+
 async function route() {
   const current = parseHash();
+  if (current.route !== "order-success") clearOrderSuccessTimer();
   setPageLoading(true);
   try {
     if (current.route === "product") {
@@ -4568,6 +4767,8 @@ async function route() {
       await renderAccountProfilePage(current.section || "profile");
     } else if (current.route === "checkout") {
       await renderCheckoutPage();
+    } else if (current.route === "order-success") {
+      await renderOrderSuccessPage(current.params);
     } else if (current.route === "shop") {
       await renderShopPage();
     } else if (current.route === "cart" || current.route === "bag") {
@@ -4738,21 +4939,25 @@ export {
   closeAccountMenu,
   closeCart,
   closeCategoryMenu,
+  closeQuickBuy,
   closeMobileMenu,
   fetchSessionStatus,
   firstNonNull,
   getItemVariants,
   getProductById,
   handleCheckoutSubmit,
+  handleQuickBuySubmit,
   initializeStorefrontSession,
   navigateToAccount,
   openCart,
   openCategoryMenu,
+  openQuickBuy,
   parseHash,
   renderCart,
   renderCheckoutPage,
   renderProductImage,
   renderProductPage,
+  refreshQuickBuy,
   renderShopPage,
   selectProductVariantOption,
   route,
@@ -4760,9 +4965,12 @@ export {
   setCartQuantity,
   setHash,
   setHeroSlide,
+  setQuickBuyAddressIndex,
   shadeName,
   showToast,
+  toggleQuickBuyAddressEditing,
   updateAccountButton,
+  updateQuickBuyQuantity,
   updateQuantity,
   toggleAccountMenu,
   normalizeGallery,

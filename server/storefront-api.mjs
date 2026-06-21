@@ -109,6 +109,13 @@ export async function handleStorefrontApi(req, res, url, storefrontSession = nul
     return true;
   }
 
+  if (pathname === "/api/storefront/quick-buy" && req.method === "POST") {
+    const payload = await readJsonBody(req).catch(() => ({}));
+    const result = await checkoutStorefrontQuickBuy(storefrontSession, payload, req);
+    sendJson(res, result.ok ? 200 : result.status || 502, result);
+    return true;
+  }
+
   if (pathname === "/api/storefront/orders/history" && req.method === "GET") {
     const result = await fetchStorefrontOrderHistory(storefrontSession, url);
     sendJson(res, result.ok ? 200 : result.status || 502, result);
@@ -455,6 +462,84 @@ async function checkoutStorefrontPhysicalBasket(session, payload = {}, req = nul
     payment: buyResult.payload,
     endpoint: buyResult.endpoint,
   });
+}
+
+async function checkoutStorefrontQuickBuy(session, payload = {}, req = null) {
+  const source = payload && typeof payload === "object" ? payload : {};
+  const product = source.product && typeof source.product === "object" ? source.product : {};
+  const productId = String(firstNonNull(source.product_id, source.productId, product.id, source.item_id, source.itemId, "") || "").trim();
+  if (!productId) {
+    return {
+      ok: false,
+      source: "storefront_quick_buy",
+      status: 400,
+      error: "Product ID is required for quick buy.",
+    };
+  }
+
+  const count = Number.parseInt(firstNonNull(source.count, product.count, 1), 10);
+  const basketPayload = normalizeStorefrontBasketPayload({
+    count: Number.isFinite(count) && count > 0 ? count : 1,
+    currency: firstNonNull(source.currency, product.currency, source.totals?.currency, ""),
+    variant_id: firstNonNull(source.variant_id, source.variantId, source.selected_variant_id, source.selectedVariantId, product.variant_id, product.variantId, null),
+    product_variant_id: firstNonNull(source.product_variant_id, source.productVariantId, product.product_variant_id, product.productVariantId, null),
+    preferences: source.preferences,
+    vendor_product_id: source.vendor_product_id,
+    price_id: source.price_id,
+  });
+
+  const basketUpdate = await addToStorefrontBasket(session, productId, basketPayload);
+  if (!basketUpdate.ok) {
+    return {
+      ok: false,
+      source: "storefront_quick_buy",
+      status: basketUpdate.status || 502,
+      error: basketUpdate.error || "Unable to prepare Selldone quick buy basket.",
+      endpoint: basketUpdate.endpoint,
+      details: basketUpdate.payload,
+      quickBuy: {
+        productId,
+        count: basketPayload.count,
+        variant_id: basketPayload.variant_id,
+      },
+    };
+  }
+
+  const checkoutPayload = {
+    ...source,
+    selected_variant_id: basketPayload.variant_id,
+    params: {
+      ...(source.params && typeof source.params === "object" ? source.params : {}),
+      quick_buy: true,
+      quick_buy_product_id: productId,
+      quick_buy_count: basketPayload.count,
+      ...(basketPayload.variant_id ? { quick_buy_variant_id: basketPayload.variant_id } : {}),
+    },
+  };
+  const checkoutResult = await checkoutStorefrontPhysicalBasket(session, checkoutPayload, req);
+  if (!checkoutResult.ok) {
+    return {
+      ...checkoutResult,
+      source: "storefront_quick_buy",
+      basketUpdate: basketUpdate.payload,
+      quickBuy: {
+        productId,
+        count: basketPayload.count,
+        variant_id: basketPayload.variant_id,
+      },
+    };
+  }
+
+  return {
+    ...checkoutResult,
+    source: "storefront_quick_buy",
+    basketUpdate: basketUpdate.payload,
+    quickBuy: {
+      productId,
+      count: basketPayload.count,
+      variant_id: basketPayload.variant_id,
+    },
+  };
 }
 
 async function requestStorefrontBasketEndpoint(token, endpoint, type, label) {
