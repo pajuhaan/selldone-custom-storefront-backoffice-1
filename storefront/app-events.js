@@ -1,16 +1,5 @@
-import * as storefront from "./app-core.js?v=storefront-my-rating-prefill-aliases-20260621";
-
-function reviewQualityLabel(value) {
-  return (
-    {
-      1: "Poor",
-      2: "Fair",
-      3: "Good",
-      4: "Very good",
-      5: "Excellent",
-    }[Number(value)] || "Choose"
-  );
-}
+import * as storefront from "./app-core.js?v=storefront-product-rating-refactor-20260621";
+import { updateProductRatingSubmitState } from "./product-rating.js?v=storefront-product-rating-refactor-20260621";
 
 const {
   state,
@@ -91,33 +80,6 @@ function syncFavoriteButtons(productId = "", isActive = false) {
   });
 }
 
-function updateReviewSubmitState(form) {
-  if (!form) return;
-  const submit = form.querySelector("[data-review-submit]");
-  if (!submit) return;
-  const comment = String(form.querySelector('textarea[name="comment"]')?.value || "").trim();
-  const canRate = form.dataset.productCanRate === "1";
-  const reviewMode = form.dataset.reviewMode || "review";
-  const ratingInputs = [...form.querySelectorAll("[data-rating-input]")].filter((input) => !input.disabled);
-  form.querySelectorAll("[data-rating-criterion]").forEach((criterion) => {
-    const checked = criterion.querySelector("[data-rating-input]:checked");
-    const value = checked ? Number(checked.value) : 0;
-    const quality = criterion.querySelector("[data-rating-quality]");
-    const progress = criterion.querySelector("[data-rating-progress]");
-    criterion.dataset.ratingValue = value ? String(value) : "";
-    if (quality) quality.textContent = value ? reviewQualityLabel(value) : "Choose";
-    if (progress) progress.style.setProperty("--rating-progress", value ? `${value * 20}%` : "0%");
-  });
-  const criterionIds = [...new Set(ratingInputs.map((input) => String(input.dataset.ratingCriterionId || "").trim()).filter(Boolean))];
-  const requiresComment = reviewMode !== "rating";
-  const requiresRating = canRate && reviewMode !== "comment" && criterionIds.length > 0;
-  const ratingFormUnavailable = reviewMode === "rating" && !criterionIds.length;
-  const ratingsComplete =
-    !requiresRating ||
-    criterionIds.every((criterionId) => ratingInputs.some((input) => input.dataset.ratingCriterionId === criterionId && input.checked));
-  submit.disabled = ratingFormUnavailable || (requiresComment && !comment) || !ratingsComplete || form.dataset.submitting === "1";
-}
-
 function toggleFavoriteProduct(productId = "") {
   const id = String(productId || "").trim();
   if (!id) return false;
@@ -158,9 +120,11 @@ export function registerStorefrontInteractions() {
       const reviewForm = targetId ? document.getElementById(targetId) : null;
       if (reviewForm) {
         reviewForm.hidden = false;
-        editMyReviewControl.hidden = true;
-        editMyReviewControl.setAttribute("aria-expanded", "true");
-        updateReviewSubmitState(reviewForm);
+        document.querySelectorAll(`[data-edit-my-review="${CSS.escape(reviewForm.id)}"]`).forEach((trigger) => {
+          trigger.hidden = true;
+          trigger.setAttribute("aria-expanded", "true");
+        });
+        updateProductRatingSubmitState(reviewForm);
         reviewForm.querySelector('textarea[name="comment"], [data-rating-input]:not(:disabled)')?.focus();
       }
       return;
@@ -487,7 +451,7 @@ export function registerStorefrontInteractions() {
   document.addEventListener("change", (event) => {
     const reviewForm = event.target.closest("[data-product-review-form]");
     if (reviewForm) {
-      updateReviewSubmitState(reviewForm);
+      updateProductRatingSubmitState(reviewForm);
       return;
     }
 
@@ -505,7 +469,7 @@ export function registerStorefrontInteractions() {
 
   document.addEventListener("input", (event) => {
     const reviewForm = event.target.closest("[data-product-review-form]");
-    if (reviewForm) updateReviewSubmitState(reviewForm);
+    if (reviewForm) updateProductRatingSubmitState(reviewForm);
   });
 
   document.querySelector("[data-search-form]")?.addEventListener("submit", (event) => {

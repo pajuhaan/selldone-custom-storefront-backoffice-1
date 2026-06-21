@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { AUTHORIZE_ENDPOINT, AUTH_PROMPT, CLIENT_ID, SCOPES, TOKEN_ENDPOINT } from "./config.mjs";
 import { escapeHtml, getOrigin, redirect, sendHtml } from "./http.mjs";
-import { SESSION_CONTEXTS, getExistingSession, getSession, oauthStates } from "./session.mjs";
+import { SESSION_CONTEXTS, getExistingSession, getSession, oauthStates, persistStorefrontSessions } from "./session.mjs";
 
 function base64Url(buffer) {
   return Buffer.from(buffer).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
@@ -56,6 +56,7 @@ export async function startAuthForContext(req, res, requestedScopes = null, sess
 
   session.context = sessionContext;
   session.oauth = { state, verifier, redirectUri, next, context: sessionContext };
+  if (sessionContext === SESSION_CONTEXTS.STOREFRONT) persistStorefrontSessions();
   oauthStates.set(state, { verifier, redirectUri, next, context: sessionContext, createdAt: Date.now() });
 
   const params = new URLSearchParams({
@@ -113,6 +114,7 @@ export async function handleCallback(req, res, url) {
       code_verifier: oauth.verifier,
     });
     delete session.oauth;
+    if (session.context === SESSION_CONTEXTS.STOREFRONT) persistStorefrontSessions();
     oauthStates.delete(state);
     const fallback = session.context === SESSION_CONTEXTS.STOREFRONT ? "/" : "/dashboard/#overview";
     const redirectAfterAuth = sanitizeAuthReturnRoute(req, oauth.next) || fallback;
@@ -152,6 +154,7 @@ export async function ensureAccessToken(session) {
 
   if (!session.tokens.refresh_token) {
     session.tokens = null;
+    if (session.context === SESSION_CONTEXTS.STOREFRONT) persistStorefrontSessions();
     return null;
   }
 
@@ -166,8 +169,10 @@ export async function ensureAccessToken(session) {
       ...refreshedTokens,
       refresh_token: refreshedTokens.refresh_token || previousRefreshToken,
     };
+    if (session.context === SESSION_CONTEXTS.STOREFRONT) persistStorefrontSessions();
   } catch {
     session.tokens = null;
+    if (session.context === SESSION_CONTEXTS.STOREFRONT) persistStorefrontSessions();
     const authError = new Error("Selldone session expired. Please sign in again.");
     authError.status = 401;
     throw authError;

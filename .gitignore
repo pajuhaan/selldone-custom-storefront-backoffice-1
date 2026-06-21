@@ -9,3 +9,4 @@
 dashboard-*.png
 node-*.log
 server*.log
+.pajulina-storefront-sessions.json

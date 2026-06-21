@@ -1,6 +1,11 @@
 import { selldoneImagePathToUrl } from "/dashboard/features/selldone-images.js?v=storefront-cart-image-20260614b";
 import { renderHomePage as renderHomePageModule } from "./home-page.js?v=storefront-product-article-wide-20260621";
-import { renderProductPage as renderProductPageModule } from "./product-page.js?v=storefront-my-rating-prefill-aliases-20260621";
+import { renderProductPage as renderProductPageModule } from "./product-page.js?v=storefront-product-rating-refactor-20260621";
+import {
+  normalizeProductMyRating,
+  normalizeProductRatingCriteria,
+  productCanRateFromPayload,
+} from "./product-rating.js?v=storefront-product-rating-refactor-20260621";
 import { renderUserMenu } from "./user-menu.js?v=storefront-product-article-wide-20260621";
 import { renderAccountProfileOverviewPage } from "./account-profile.js?v=storefront-product-article-wide-20260621";
 import { renderOrderHistoryPage } from "./order-history.js?v=storefront-product-article-wide-20260621";
@@ -796,7 +801,7 @@ function mapProduct(raw) {
   const originalCandidate = firstNonNull(raw.original, raw.regular_price, raw.compare_at_price, raw.base_price, raw.list_price);
   const discount = toNumber(raw.discount, 0);
   const colors = toNumber(raw.colors_count || raw.color_count || (Array.isArray(mappedVariants) ? mappedVariants.length : 0), 1);
-  const rating = toNumber(raw.rate || raw.rate_avg || raw.rating || raw.rate_count, 0);
+  const rating = toNumber(firstNonNull(raw.rate, raw.rate_avg, raw.rating, raw.review_rating, 0), 0);
   const reviews = Math.max(0, parseInt(firstNonNull(raw.rate_count, raw.review_count, raw.reviews_count, 0), 10) || 0);
   const title = firstNonNull(raw.title, raw.name, raw.product_name, raw.title_en, raw.name_en, `Product ${raw.id || "Unknown"}`);
   const brand = firstNonNull(raw.brand, raw.brand_name, raw.seller, raw.supplier_name, raw.vendor?.name, raw.vendor_name);
@@ -1000,41 +1005,6 @@ function productPurchasedFromPayload(raw = {}) {
   return purchased !== null && purchased !== undefined ? storefrontBooleanFlag(purchased) : false;
 }
 
-function productCanRateFromPayload(raw = {}) {
-  const explicit = firstNonNull(
-    raw.can_rate,
-    raw.canRate,
-    raw.can_rate_product,
-    raw.canRateProduct,
-    raw.can_review,
-    raw.canReview,
-    raw.can_comment_rate,
-    raw.canCommentRate,
-    null,
-  );
-  if (explicit !== null && explicit !== undefined) return storefrontBooleanFlag(explicit);
-
-  const purchased = firstNonNull(
-    raw.purchased,
-    raw.has_purchased,
-    raw.hasPurchased,
-    raw.bought,
-    raw.has_bought,
-    raw.hasBought,
-    raw.is_buyer,
-    raw.isBuyer,
-    raw.buyer,
-    raw.ordered,
-    raw.has_order,
-    raw.hasOrder,
-    null,
-  );
-  if (purchased !== null && purchased !== undefined) return storefrontBooleanFlag(purchased);
-
-  const myRating = firstNonNull(raw.my_rating, raw.myRating, raw.user_rating, raw.userRating, raw.rating_by_me, raw.ratingByMe, null);
-  return Boolean(myRating && typeof myRating === "object" ? Object.keys(myRating).length : myRating);
-}
-
 function storefrontBooleanFlag(value) {
   if (typeof value === "boolean") return value;
   if (typeof value === "number") return value > 0;
@@ -1044,180 +1014,6 @@ function storefrontBooleanFlag(value) {
     if (["0", "false", "no", "n", "null", "none"].includes(normalized)) return false;
   }
   return Boolean(value);
-}
-
-function normalizeProductMyRating(raw = {}, ratingCriteria = []) {
-  const source = firstNonNull(
-    raw.my_rating,
-    raw.myRating,
-    raw.user_rating,
-    raw.userRating,
-    raw.rating_by_me,
-    raw.ratingByMe,
-    raw.my_rate,
-    raw.myRate,
-    raw.user_rate,
-    raw.userRate,
-    raw.customer_rating,
-    raw.customerRating,
-    raw.customer_rate,
-    raw.customerRate,
-    raw.viewer_rating,
-    raw.viewerRating,
-    raw.viewer_rate,
-    raw.viewerRate,
-    null,
-  );
-  if (!source) return null;
-
-  const aliases = new Map();
-  const addAlias = (alias, id) => {
-    const safeAlias = String(alias || "").trim();
-    const safeId = String(id || "").trim();
-    if (safeAlias && safeId) aliases.set(safeAlias, safeId);
-  };
-  ratingCriteria.forEach((criterion, index) => {
-    const id = String(firstNonNull(criterion?.id, criterion?.rating_id, criterion?.ratingId, criterion?.key, criterion?.name, index + 1) || "").trim();
-    if (!id) return;
-    [
-      id,
-      criterion?.name,
-      criterion?.title,
-      criterion?.label,
-      criterion?.key,
-      criterion?.slug,
-      criterion?.code,
-      criterion?.rating_id,
-      criterion?.ratingId,
-      criterion?.rate_id,
-      criterion?.rateId,
-      criterion?.product_rating_id,
-      criterion?.productRatingId,
-      index + 1,
-    ].forEach((alias) => addAlias(alias, id));
-  });
-
-  const normalized = {};
-  const assign = (key, value) => {
-    const objectKey =
-      value && typeof value === "object"
-        ? firstNonNull(
-            value.id,
-            value.rating_id,
-            value.ratingId,
-            value.rate_id,
-            value.rateId,
-            value.product_rating_id,
-            value.productRatingId,
-            value.key,
-            value.slug,
-            value.code,
-            value.name,
-            value.title,
-            value.label,
-            null,
-          )
-        : null;
-    const rawKey = String(firstNonNull(objectKey, key, "") || "").trim();
-    const resolvedKey = aliases.get(rawKey) || rawKey;
-    const rawValue = value && typeof value === "object" ? firstNonNull(value.value, value.rate, value.rating, value.score, value.point, value.points, value.stars, 0) : value;
-    const numeric = Number(rawValue);
-    if (!resolvedKey || !Number.isFinite(numeric) || numeric < 1 || numeric > 5) return;
-    normalized[resolvedKey] = Math.max(1, Math.min(5, Math.round(numeric)));
-  };
-
-  const walk = (value, fallbackKey = "") => {
-    if (!value) return;
-    if (Array.isArray(value)) {
-      value.forEach((entry, index) => walk(entry, String(index + 1)));
-      return;
-    }
-    if (typeof value === "object") {
-      const directKey = firstNonNull(
-        value.id,
-        value.rating_id,
-        value.ratingId,
-        value.rate_id,
-        value.rateId,
-        value.product_rating_id,
-        value.productRatingId,
-        value.key,
-        value.slug,
-        value.code,
-        value.name,
-        value.title,
-        value.label,
-        fallbackKey,
-      );
-      const directValue = firstNonNull(value.value, value.rate, value.rating, value.score, value.point, value.points, value.stars, null);
-      if (directValue !== null && directValue !== undefined) assign(directKey, directValue);
-      const nested = firstNonNull(
-        value.user_rating,
-        value.userRating,
-        value.my_rating,
-        value.myRating,
-        value.rating_values,
-        value.ratingValues,
-        value.rating_items,
-        value.ratingItems,
-        value.ratings,
-        value.rates,
-        value.items,
-        value.values,
-        value.criteria,
-        null,
-      );
-      if (nested) walk(nested, fallbackKey);
-      if (directValue === null || directValue === undefined) {
-        Object.entries(value).forEach(([key, entry]) => {
-          if (
-            [
-              "user_rating",
-              "userRating",
-              "my_rating",
-              "myRating",
-              "rating_values",
-              "ratingValues",
-              "rating_items",
-              "ratingItems",
-              "ratings",
-              "rates",
-              "items",
-              "values",
-              "criteria",
-            ].includes(key)
-          )
-            return;
-          assign(key, entry);
-        });
-      }
-      return;
-    }
-    assign(fallbackKey, value);
-  };
-
-  walk(source);
-  return Object.keys(normalized).length ? normalized : source;
-}
-
-function normalizeProductRatingCriteria(rawRatings = []) {
-  return (Array.isArray(rawRatings) ? rawRatings : [])
-    .map((entry, index) => {
-      if (!entry || typeof entry !== "object") return null;
-      const id = String(firstNonNull(entry.id, entry.rating_id, entry.ratingId, entry.key, index + 1) || "").trim();
-      const name = String(firstNonNull(entry.name, entry.title, entry.label, `Rating ${index + 1}`) || `Rating ${index + 1}`).trim();
-      const value = toNumber(firstNonNull(entry.value, entry.total, 0), 0);
-      const count = toNumber(firstNonNull(entry.count, entry.total_count, entry.totalCount, 0), 0);
-      const average = count > 0 ? Math.max(0, Math.min(5, value / count)) : toNumber(firstNonNull(entry.average, entry.rate, entry.rating, 0), 0);
-      return {
-        id,
-        name,
-        value,
-        count,
-        average: Math.max(0, Math.min(5, average)),
-      };
-    })
-    .filter((entry) => entry?.id && entry?.name);
 }
 
 function normalizeProductVariants(rawVariants = [], rawProduct = null) {
@@ -2725,28 +2521,81 @@ function normalizeStorefrontReviewRatings(value = null) {
     .filter(Boolean);
 }
 
-function normalizeStorefrontReviewEntry(entry = {}) {
+function normalizeStorefrontBuyerUserIds(...values) {
+  const ids = new Set();
+  const add = (value) => {
+    if (value === null || value === undefined || value === "") return;
+    if (Array.isArray(value)) {
+      value.forEach(add);
+      return;
+    }
+    if (typeof value === "object") {
+      add(firstNonNull(value.user_id, value.userId, value.id, value.customer_id, value.customerId, value.buyer_id, value.buyerId, null));
+      return;
+    }
+    const id = String(value).trim();
+    if (id) ids.add(id);
+  };
+  values.forEach(add);
+  return ids;
+}
+
+function normalizeStorefrontReviewEntry(entry = {}, options = {}) {
   if (!entry || typeof entry !== "object") return null;
   const rating = Math.max(0, Math.min(5, Math.round(parseStorefrontReviewCount(entry.rating, entry.rate))));
   const rawName = firstNonNull(
     entry.name,
     entry.author_name,
     entry.user_name,
+    entry.username,
+    entry.display_name,
+    entry.full_name,
+    entry.customer_name,
+    entry.customerName,
+    String([entry.first_name, entry.last_name].filter(Boolean).join(" ")).trim() || null,
+    String([entry.firstName, entry.lastName].filter(Boolean).join(" ")).trim() || null,
     entry.reviewer_name,
     entry.profile?.name,
     entry.profile?.full_name,
     entry.profile?.display_name,
+    entry.profile?.username,
+    String([entry.profile?.first_name, entry.profile?.last_name].filter(Boolean).join(" ")).trim() || null,
+    String([entry.profile?.firstName, entry.profile?.lastName].filter(Boolean).join(" ")).trim() || null,
     entry.user?.name,
     entry.user?.full_name,
     entry.user?.display_name,
+    entry.user?.username,
+    entry.user?.email,
+    String([entry.user?.first_name, entry.user?.last_name].filter(Boolean).join(" ")).trim() || null,
+    String([entry.user?.firstName, entry.user?.lastName].filter(Boolean).join(" ")).trim() || null,
+    entry.customer?.name,
+    entry.customer?.full_name,
+    entry.customer?.display_name,
+    entry.customer?.username,
+    String([entry.customer?.first_name, entry.customer?.last_name].filter(Boolean).join(" ")).trim() || null,
+    String([entry.customer?.firstName, entry.customer?.lastName].filter(Boolean).join(" ")).trim() || null,
     entry.reviewer?.name,
     entry.reviewer?.full_name,
     entry.reviewer?.display_name,
+    entry.reviewer?.username,
+    String([entry.reviewer?.first_name, entry.reviewer?.last_name].filter(Boolean).join(" ")).trim() || null,
+    String([entry.reviewer?.firstName, entry.reviewer?.lastName].filter(Boolean).join(" ")).trim() || null,
     null,
   );
   const text = firstNonNull(entry.comment, entry.text, entry.body, entry.message, entry.title, null);
   const created = firstNonNull(entry.created_at, entry.createdAt, entry.date, entry.created_date, null);
   const userId = firstNonNull(entry.user_id, entry.userId, entry.author_id, entry.reviewer_id, entry.profile?.id, entry.user?.id, entry.reviewer?.id, null);
+  const buyerUserIds = normalizeStorefrontBuyerUserIds(
+    options.buyerUserIds,
+    options.buyer_user_ids,
+    entry.buyer_user_ids,
+    entry.buyerUserIds,
+    entry.article?.buyer_user_ids,
+    entry.article?.buyerUserIds,
+    entry.product?.buyer_user_ids,
+    entry.product?.buyerUserIds,
+  );
+  const userIdKey = String(userId ?? "").trim();
   const avatarUrl = firstNonNull(
     entry.avatarUrl,
     entry.avatar_url,
@@ -2766,9 +2615,71 @@ function normalizeStorefrontReviewEntry(entry = {}) {
     userId ? storefrontUserAvatarUrl(userId, "small") : "",
     "",
   );
+  const verifiedBuyer =
+    Boolean(userIdKey && buyerUserIds.has(userIdKey)) ||
+    [
+      entry.verified,
+      entry.verified_purchase,
+      entry.verifiedPurchase,
+      entry.verified_buyer,
+      entry.verifiedBuyer,
+      entry.is_verified,
+      entry.isVerified,
+      entry.purchased,
+      entry.has_purchased,
+      entry.hasPurchased,
+      entry.bought,
+      entry.has_bought,
+      entry.hasBought,
+      entry.is_buyer,
+      entry.isBuyer,
+      entry.buyer,
+      entry.user_purchased,
+      entry.userPurchased,
+      entry.customer_purchased,
+      entry.customerPurchased,
+      entry.user?.verified,
+      entry.user?.verified_purchase,
+      entry.user?.verifiedPurchase,
+      entry.user?.verified_buyer,
+      entry.user?.verifiedBuyer,
+      entry.user?.purchased,
+      entry.user?.has_purchased,
+      entry.user?.hasPurchased,
+      entry.user?.is_buyer,
+      entry.user?.isBuyer,
+      entry.user?.buyer,
+      entry.customer?.verified,
+      entry.customer?.verified_purchase,
+      entry.customer?.verifiedPurchase,
+      entry.customer?.verified_buyer,
+      entry.customer?.verifiedBuyer,
+      entry.customer?.purchased,
+      entry.customer?.has_purchased,
+      entry.customer?.hasPurchased,
+      entry.customer?.is_buyer,
+      entry.customer?.isBuyer,
+      entry.customer?.buyer,
+      entry.profile?.verified_buyer,
+      entry.profile?.verifiedBuyer,
+      entry.profile?.purchased,
+      entry.profile?.has_purchased,
+      entry.profile?.hasPurchased,
+      entry.profile?.is_buyer,
+      entry.profile?.isBuyer,
+      entry.profile?.buyer,
+      entry.reviewer?.verified_buyer,
+      entry.reviewer?.verifiedBuyer,
+      entry.reviewer?.purchased,
+      entry.reviewer?.has_purchased,
+      entry.reviewer?.hasPurchased,
+      entry.reviewer?.is_buyer,
+      entry.reviewer?.isBuyer,
+      entry.reviewer?.buyer,
+    ].some((value) => storefrontBooleanFlag(value));
   return {
     id: String(firstNonNull(entry.id, entry.review_id, entry.comment_id, "") || "").trim(),
-    name: String(firstNonNull(rawName, "Customer")).trim(),
+    name: String(firstNonNull(rawName, "")).trim(),
     title: String(firstNonNull(entry.title, "")).trim(),
     comment: String(firstNonNull(text, "")).trim(),
     rating,
@@ -2776,21 +2687,7 @@ function normalizeStorefrontReviewEntry(entry = {}) {
     avatarUrl: String(avatarUrl || "").trim(),
     userId,
     createdAt: created ? String(created) : "",
-    verified: Boolean(
-      firstNonNull(
-        entry.verified,
-        entry.verified_purchase,
-        entry.verifiedPurchase,
-        entry.verified_buyer,
-        entry.verifiedBuyer,
-        entry.is_verified,
-        entry.isVerified,
-        entry.purchased,
-        entry.has_purchased,
-        entry.hasPurchased,
-        false,
-      ),
-    ),
+    verified: verifiedBuyer,
     isMine: Boolean(firstNonNull(entry.isMine, entry.is_mine, entry.mine, entry.my, entry.own, entry.is_own, entry.isOwn, entry.my_review, entry.myReview, false)),
   };
 }
@@ -2823,6 +2720,14 @@ function normalizeStorefrontReviewSummary(payload = {}) {
     payload?.rating,
     {},
   );
+  const hasRatingAverage = [
+    summary.rating,
+    summary.avg_rating,
+    summary.average_rating,
+    summary.rate,
+    summary.avg,
+    summary.average,
+  ].some((value) => value !== null && value !== undefined && value !== "");
   const list = firstArray(
     payload?.reviews,
     payload?.data?.reviews,
@@ -2837,11 +2742,14 @@ function normalizeStorefrontReviewSummary(payload = {}) {
   );
   return {
     count: parseStorefrontReviewCount(firstNonNull(summary.count, summary.total, summary.total_count), 0),
-    average: parseStorefrontReviewCount(firstNonNull(summary.rating, summary.avg_rating, summary.average_rating, summary.rate, 0), 0),
+    average: hasRatingAverage
+      ? parseStorefrontReviewCount(firstNonNull(summary.rating, summary.avg_rating, summary.average_rating, summary.rate, summary.avg, summary.average), 0)
+      : null,
     recommendPercent: parseStorefrontReviewCount(firstNonNull(summary.recommend_percent, summary.recommendation_percent), 0),
     buckets: parseStorefrontReviewBuckets(summary),
     listLength: Array.isArray(list) ? list.length : 0,
     source: summary,
+    hasRatingAverage,
   };
 }
 
@@ -2884,10 +2792,10 @@ function applyProductReviewPayloadToProduct(product = null, reviewData = null) {
   if (reviewData.reviewSummary && typeof reviewData.reviewSummary === "object") {
     product.reviewSummary = reviewData.reviewSummary;
   }
-  if (reviewData.reviewCount !== null && Number.isFinite(Number(reviewData.reviewCount))) {
+  if (reviewData.hasRatingSummary && reviewData.reviewCount !== null && Number.isFinite(Number(reviewData.reviewCount))) {
     product.reviews = Number(reviewData.reviewCount);
   }
-  if (reviewData.reviewRating !== null && Number.isFinite(Number(reviewData.reviewRating))) {
+  if (reviewData.hasRatingSummary && reviewData.reviewRating !== null && Number.isFinite(Number(reviewData.reviewRating))) {
     product.rating = Number(reviewData.reviewRating);
   }
   product.reviewsLoaded = true;
@@ -2920,13 +2828,26 @@ async function fetchXapiProductReviews(productId) {
       payload?.comments,
       [],
     );
-    const normalizedReviews = reviews.map((entry) => normalizeStorefrontReviewEntry(entry)).filter(Boolean);
+    const buyerUserIds = normalizeStorefrontBuyerUserIds(
+      payload?.buyer_user_ids,
+      payload?.buyerUserIds,
+      payload?.data?.buyer_user_ids,
+      payload?.data?.buyerUserIds,
+      payload?.result?.buyer_user_ids,
+      payload?.result?.buyerUserIds,
+      payload?.payload?.buyer_user_ids,
+      payload?.payload?.buyerUserIds,
+      reviewPayload?.buyer_user_ids,
+      reviewPayload?.buyerUserIds,
+    );
+    const normalizedReviews = reviews.map((entry) => normalizeStorefrontReviewEntry(entry, { buyerUserIds })).filter(Boolean);
 
     return {
       reviewsList: normalizedReviews,
       reviewSummary,
-      reviewCount: Math.max(reviewSummary.count, normalizedReviews.length),
-      reviewRating: reviewSummary.average > 0 ? reviewSummary.average : null,
+      reviewCount: reviewSummary.hasRatingAverage ? Math.max(reviewSummary.count, normalizedReviews.length) : null,
+      reviewRating: reviewSummary.hasRatingAverage && reviewSummary.average > 0 ? reviewSummary.average : null,
+      hasRatingSummary: Boolean(reviewSummary.hasRatingAverage),
     };
   } catch {
     return null;

@@ -1154,6 +1154,19 @@ async function fetchStorefrontProductReviews(productId, storefrontSession = null
     return articleCommentsPayload;
   }
 
+  const articleId = extractStorefrontProductArticleId(cachedProduct, productResult?.payload);
+  const customerShopCommentsPayload = token ? await fetchStorefrontCustomerShopComments(token, safeId, articleId) : null;
+  if (customerShopCommentsPayload) {
+    return customerShopCommentsPayload;
+  }
+
+  if (articleId) {
+    const fetchedArticleCommentsPayload = await fetchStorefrontProductArticleComments(articleId, safeId, token);
+    if (fetchedArticleCommentsPayload) {
+      return fetchedArticleCommentsPayload;
+    }
+  }
+
   const candidatePaths = ["reviews", "comments"];
   let lastFailure = null;
 
@@ -1435,21 +1448,32 @@ function extractStorefrontProductArticleId(product = null, payload = null) {
       product?.articleId,
       product?.product_article_id,
       product?.productArticleId,
+      typeof product?.blog === "object" ? null : product?.blog,
+      typeof product?.article === "object" ? null : product?.article,
+      typeof product?.product_article === "object" ? null : product?.product_article,
       article?.id,
       article?.article_id,
       article?.articleId,
       payload?.article_id,
       payload?.articleId,
+      typeof payload?.blog === "object" ? null : payload?.blog,
+      typeof payload?.article === "object" ? null : payload?.article,
       payload?.product?.article_id,
       payload?.product?.articleId,
+      typeof payload?.product?.blog === "object" ? null : payload?.product?.blog,
+      typeof payload?.product?.article === "object" ? null : payload?.product?.article,
       payload?.data?.article_id,
       payload?.data?.articleId,
       payload?.data?.product?.article_id,
       payload?.data?.product?.articleId,
+      typeof payload?.data?.product?.blog === "object" ? null : payload?.data?.product?.blog,
+      typeof payload?.data?.product?.article === "object" ? null : payload?.data?.product?.article,
       payload?.result?.article_id,
       payload?.result?.articleId,
       payload?.result?.product?.article_id,
       payload?.result?.product?.articleId,
+      typeof payload?.result?.product?.blog === "object" ? null : payload?.result?.product?.blog,
+      typeof payload?.result?.product?.article === "object" ? null : payload?.result?.product?.article,
       "",
     ) || "",
   ).trim();
@@ -1554,6 +1578,173 @@ function buildStorefrontArticleCommentsPayloadFromProduct(product = null, payloa
     },
     new URL(`${STOREFRONT_XAPI_BASE}/article/${encodeURIComponent(articleId || String(productId || "").trim())}/comment`),
     200,
+    "product_article_comments",
+  );
+}
+
+async function fetchStorefrontCustomerShopComments(token, productId = "", articleId = "") {
+  if (!token) return null;
+
+  const safeProductId = String(productId || "").trim();
+  const safeArticleId = String(articleId || "").trim();
+  const endpoint = new URL(`${STOREFRONT_XAPI_BASE}/shops/@${STOREFRONT_SHOP_HANDLE}/comments`);
+  endpoint.searchParams.set("offset", "0");
+  endpoint.searchParams.set("limit", "100");
+  if (safeArticleId) endpoint.searchParams.set("article_id", safeArticleId);
+  if (safeProductId) endpoint.searchParams.set("product_id", safeProductId);
+
+  const result = await requestStorefrontAuthorizedEndpoint(token, endpoint, {
+    method: "GET",
+    label: "customer-shop-comments",
+  });
+  if (!result?.ok) return null;
+
+  const comments = firstStorefrontCommentArray(
+    result.payload?.comments,
+    result.payload?.data?.comments,
+    result.payload?.result?.comments,
+    result.payload?.payload?.comments,
+    result.payload?.items,
+    result.payload?.data,
+    result.payload?.result?.data,
+    [],
+  ).filter((comment) => storefrontCommentMatchesProductArticle(comment, safeProductId, safeArticleId));
+
+  if (!comments.length) return null;
+
+  return normalizeStorefrontReviewsResult(
+    {
+      ...result.payload,
+      comments,
+      review_stats: {
+        count: comments.length,
+        total: comments.length,
+        total_count: comments.length,
+        article_id: safeArticleId || null,
+        product_id: safeProductId || null,
+      },
+    },
+    endpoint,
+    result.status,
+    "product_article_comments",
+  );
+}
+
+function storefrontCommentMatchesProductArticle(comment = {}, productId = "", articleId = "") {
+  const safeProductId = String(productId || "").trim();
+  const safeArticleId = String(articleId || "").trim();
+  const articleCandidates = [
+    comment?.article_id,
+    comment?.articleId,
+    comment?.article?.id,
+    comment?.article?.article_id,
+    comment?.article?.articleId,
+  ].map((value) => String(firstNonNull(value, "") || "").trim());
+  const productCandidates = [
+    comment?.product_id,
+    comment?.productId,
+    comment?.product?.id,
+    comment?.product?.product_id,
+    comment?.product?.productId,
+    comment?.shop_product_id,
+    comment?.shopProductId,
+  ].map((value) => String(firstNonNull(value, "") || "").trim());
+
+  if (safeArticleId && articleCandidates.includes(safeArticleId)) return true;
+  if (safeProductId && productCandidates.includes(safeProductId)) return true;
+  return false;
+}
+
+async function fetchStorefrontProductArticleComments(articleId, productId, token = null) {
+  const safeArticleId = String(articleId || "").trim();
+  if (!safeArticleId) return null;
+
+  const endpoints = [
+    new URL(`${STOREFRONT_XAPI_BASE}/shops/@${STOREFRONT_SHOP_HANDLE}/blogs/${encodeURIComponent(safeArticleId)}`),
+    new URL(`${STOREFRONT_XAPI_BASE}/article/${encodeURIComponent(safeArticleId)}`),
+    new URL(`${STOREFRONT_XAPI_BASE}/articles/${encodeURIComponent(safeArticleId)}`),
+    new URL(`${STOREFRONT_XAPI_BASE}/article/${encodeURIComponent(safeArticleId)}/comments`),
+    new URL(`${STOREFRONT_XAPI_BASE}/articles/${encodeURIComponent(safeArticleId)}/comments`),
+    new URL(`${STOREFRONT_XAPI_BASE}/article/product/${encodeURIComponent(safeArticleId)}`),
+    new URL(`${STOREFRONT_XAPI_BASE}/article/product/${encodeURIComponent(safeArticleId)}/comments`),
+  ];
+
+  for (const endpoint of endpoints) {
+    const authorizedResult = token
+      ? await requestStorefrontAuthorizedEndpoint(token, endpoint, { method: "GET", label: "product-article-comments" })
+      : null;
+    if (authorizedResult?.ok) {
+      const normalized = normalizeStorefrontArticleCommentsResult(authorizedResult.payload, endpoint, authorizedResult.status, productId, safeArticleId);
+      if (normalized) return normalized;
+    }
+
+    if (authorizedResult && ![401, 403, 404, 405].includes(authorizedResult.status || 0)) {
+      continue;
+    }
+
+    const publicResult = await requestStorefrontXapi(endpoint, "product_article_comments");
+    if (!publicResult.ok) continue;
+
+    const normalized = normalizeStorefrontArticleCommentsResult(publicResult.payload, endpoint, publicResult.status, productId, safeArticleId);
+    if (normalized) return normalized;
+  }
+
+  return null;
+}
+
+function normalizeStorefrontArticleCommentsResult(payload = {}, endpoint, status = 200, productId = "", articleId = "") {
+  const product = firstNonNull(
+    payload?.product,
+    payload?.data?.product,
+    payload?.result?.product,
+    payload?.payload?.product,
+    null,
+  );
+  const embedded = buildStorefrontArticleCommentsPayloadFromProduct(product, payload, productId);
+  if (embedded) {
+    return {
+      ...embedded,
+      endpoint: publicStorefrontEndpoint(endpoint),
+      status,
+      payload,
+    };
+  }
+
+  const comments = firstStorefrontCommentArray(
+    payload?.comment,
+    payload?.comments,
+    payload?.comments?.data,
+    payload?.comments?.items,
+    payload?.comments?.comments,
+    payload?.data?.comment,
+    payload?.data?.comments,
+    payload?.data?.comments?.data,
+    payload?.data?.comments?.items,
+    payload?.result?.comment,
+    payload?.result?.comments,
+    payload?.result?.comments?.data,
+    payload?.result?.comments?.items,
+    payload?.payload?.comment,
+    payload?.payload?.comments,
+    payload?.payload?.comments?.data,
+    payload?.payload?.comments?.items,
+    [],
+  );
+
+  if (!comments.length) return null;
+
+  return normalizeStorefrontReviewsResult(
+    {
+      comments,
+      review_stats: {
+        count: comments.length,
+        total: comments.length,
+        total_count: comments.length,
+        article_id: articleId,
+      },
+    },
+    endpoint,
+    status,
     "product_article_comments",
   );
 }

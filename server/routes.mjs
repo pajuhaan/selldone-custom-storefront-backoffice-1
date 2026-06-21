@@ -1,4 +1,4 @@
-import { API_BASE, AUTH_PROMPT, SCOPES, SHOP, SHOP_ID, STOREFRONT_SCOPES } from "./config.mjs";
+import { API_BASE, AUTH_PROMPT, SCOPES, SHOP, SHOP_ID, STOREFRONT_SCOPES, STOREFRONT_XAPI_BASE } from "./config.mjs";
 import { ensureAccessToken, handleCallback, sanitizeAuthReturnRoute, startAuth, startAuthForContext } from "./auth.mjs";
 import { clearStoredTokens } from "./token-store.mjs";
 import { SESSION_CONTEXTS, destroySession, getSession } from "./session.mjs";
@@ -23,6 +23,8 @@ import { handleCustomerRoutes } from "./features/customers.mjs";
 import { serveStatic } from "./static.mjs";
 import { handleStorefrontApi } from "./storefront-api.mjs";
 import { handleSetupRoutes, shouldRedirectToSetup } from "../setup/setup-routes.mjs";
+
+const SELLDONE_SERVICE_URL = process.env.SELLDONE_SERVICE_URL || "https://selldone.com";
 
 export function createRequestHandler() {
   return async (req, res) => {
@@ -117,7 +119,7 @@ export function createRequestHandler() {
           authenticated = Boolean(accessToken);
           if (authenticated) {
             try {
-              user = await userProfilePayload(session);
+              user = await storefrontUserProfilePayload(session);
             } catch (error) {
               if (error?.status === 401 || error?.status === 403) {
                 authenticated = false;
@@ -399,6 +401,82 @@ export function createRequestHandler() {
       );
       sendJson(res, status, { error: error.message || "Dashboard server error" });
     }
+  };
+}
+
+function firstDefined(...values) {
+  return values.find((value) => value !== null && value !== undefined);
+}
+
+async function storefrontUserProfilePayload(session) {
+  const token = await ensureAccessToken(session);
+  if (!token) {
+    const authError = new Error("Authentication required");
+    authError.status = 401;
+    throw authError;
+  }
+
+  const response = await fetch(`${STOREFRONT_XAPI_BASE}/me`, {
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${token}`,
+      "X-Requested-With": "XMLHttpRequest",
+    },
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload?.error || payload?.error_msg) {
+    const error = new Error(payload?.error_msg || payload?.message || payload?.error || "Unable to load storefront customer profile.");
+    error.status = response.status || 502;
+    throw error;
+  }
+
+  const profile = firstDefined(
+    payload?.profile,
+    payload?.customer?.profile,
+    payload?.customer,
+    payload?.user,
+    payload?.data?.profile,
+    payload?.data?.customer,
+    payload?.data?.user,
+    payload,
+    {},
+  );
+  const userId = firstDefined(
+    profile?.user_id,
+    profile?.userId,
+    profile?.id,
+    payload?.user_id,
+    payload?.userId,
+    payload?.id,
+    payload?.profile?.user_id,
+    payload?.customer?.user_id,
+    null,
+  );
+  const fallback = fallbackUserProfile();
+  const normalizedUserId = userId || profile?.user_id || profile?.id || fallback.id;
+  const rawAvatar = firstDefined(profile?.avatar, profile?.photo, payload?.avatar, payload?.profile?.avatar, fallback.avatar);
+  const avatarUrl = normalizedUserId
+    ? `${SELLDONE_SERVICE_URL}/users/${encodeURIComponent(String(normalizedUserId))}/profile/avatar/small`
+    : rawAvatar;
+  return {
+    ...fallback,
+    ...profile,
+    id: normalizedUserId,
+    user_id: normalizedUserId,
+    name: firstDefined(profile?.name, payload?.name, payload?.profile?.name, fallback.name),
+    email: firstDefined(profile?.email, payload?.email, payload?.profile?.email, fallback.email),
+    avatar: avatarUrl,
+    avatar_url: avatarUrl,
+    avatarUrl,
+    avatar_path: rawAvatar,
+    profile: {
+      ...profile,
+      avatar: avatarUrl,
+      avatar_url: avatarUrl,
+      avatarUrl,
+      avatar_path: rawAvatar,
+    },
+    customer: payload?.customer || null,
   };
 }
 
