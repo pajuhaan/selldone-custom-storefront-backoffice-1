@@ -1,5 +1,7 @@
 # Selldone Static Storefront and Dashboard
 
+[![GitHub Repository](https://img.shields.io/badge/GitHub-View%20on%20GitHub-181717?logo=github&logoColor=white)](https://github.com/pajuhaan/selldone-custom-storefront-backoffice-1)
+
 A fully static Selldone storefront plus browser-side dashboard for Cloudflare Workers Static Assets.
 
 Selldone remains the commerce backend. This repository only ships static HTML, CSS, and JavaScript:

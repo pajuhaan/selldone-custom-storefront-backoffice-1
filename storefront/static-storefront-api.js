@@ -560,6 +560,7 @@ async function checkoutPhysicalBasket(body, nativeFetch) {
     method: "POST",
     body: {
       code: firstValue(basket.code, checkout.code, null),
+      amount_check: amountCheck(bill, body),
       amount: amountCheck(bill, body),
       currency: firstValue(checkout.currency, bill.currency, body?.totals?.currency, null),
       return_url: firstValue(body.return_url, `${window.location.origin}${window.location.pathname}#order-success`),
@@ -720,7 +721,21 @@ function extractBill(payload = {}) {
 }
 
 function amountCheck(bill = {}, body = {}) {
-  const parsed = Number(firstValue(bill.sum, bill.total, bill.final_total, bill.payable, bill.amount, body?.totals?.total, 0));
+  const parsed = Number(
+    firstValue(
+      bill.sum,
+      bill.total,
+      bill.final_total,
+      bill.payable,
+      bill.amount,
+      body?.totals?.total,
+      body?.bill?.total,
+      body?.bill?.sum,
+      body?.amount,
+      body?.amount_check,
+      0,
+    ),
+  );
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
