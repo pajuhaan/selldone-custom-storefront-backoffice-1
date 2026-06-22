@@ -25,18 +25,6 @@ async function copyDirectory(from, to) {
 
 async function writeCloudflareFiles() {
   await writeFile(
-    join(DIST, "_redirects"),
-    [
-      "/dashboard /dashboard/ 308",
-      "/callback /callback/ 308",
-      "/dashboard/* /dashboard/index.html 200",
-      "/callback/* /callback/index.html 200",
-      "/* /index.html 200",
-      "",
-    ].join("\n"),
-    "utf8",
-  );
-  await writeFile(
     join(DIST, "_headers"),
     [
       "/*",

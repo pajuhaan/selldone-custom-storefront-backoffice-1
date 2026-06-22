@@ -90,7 +90,7 @@ Cloudflare Workers Builds settings:
 Use Cloudflare Workers Builds connected to this GitHub repository. The Cloudflare build form should use:
 
 ```text
-Project name: selldone-shop-a1-worker
+Project name: selldone-shop-a1
 Build command: npm run build:static
 Deploy command: npx wrangler deploy
 Non-production branch deploy command: npx wrangler versions upload

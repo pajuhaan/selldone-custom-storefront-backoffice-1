@@ -4,7 +4,7 @@ This package deploys as static assets on Cloudflare Workers. No Node server or t
 
 Cloudflare Workers Builds settings:
 
-- Project name: `selldone-shop-a1-worker`
+- Project name: `selldone-shop-a1`
 - Build command: `npm run build:static`
 - Deploy command: `npx wrangler deploy`
 - Non-production branch deploy command: `npx wrangler versions upload`
