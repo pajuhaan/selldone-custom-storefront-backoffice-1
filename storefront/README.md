@@ -1,30 +1,32 @@
 # Pajulina Storefront
 
-Standalone English storefront prototype for Pajulina Beauty.
+Static English storefront for Pajulina Beauty.
 
-Open this storefront through the local Node server (not `file://`), especially when live Selldone storefront data is needed.
-
-Use the repository server:
+Open it through the repository static dev server, not `file://`, so ES modules, OAuth callback routing, and browser-direct Selldone XAPI calls use a real origin.
 
 ```bash
-npm start
+npm run dev:static
 ```
 
-Then open:
+Default URL:
 
 ```text
-http://localhost:5173/
+http://localhost:8788/
 ```
 
-`/storefront/` is kept as a legacy-compatible route, but `/` is the canonical storefront path.
+For port `5173`:
 
-This keeps SDK/cookie flows valid and avoids origin issues that can appear when opening HTML directly.
+```powershell
+$env:STATIC_DEV_PORT="5173"
+npm run dev:static
+```
 
-It loads products and category list through Selldone storefront XAPI. Mock products are not rendered; if the live catalog request fails, the storefront shows a live-data error state.
+The storefront is the canonical `/` route in production and in local dev.
 
 Files:
 
-- `index.html` - storefront shell, header, footer, cart drawer
+- `index.html` - storefront shell, meta config, header, footer, cart drawer
 - `styles.css` - responsive retail layout and visual system
-- `app.js` - home, catalog, product detail, filters, cart interactions
-- `assets/` - generated bitmap assets used by the storefront
+- `app.js` - static app bootstrap
+- `static-storefront-api.js` - browser-side adapter from local `/api/storefront/*` calls to Selldone XAPI
+- `app-core.js` and feature modules - catalog, product detail, cart, checkout, account, blog, and profile UI

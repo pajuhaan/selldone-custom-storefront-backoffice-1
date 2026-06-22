@@ -1,92 +1,102 @@
-# Selldone Custom Storefront and Backoffice
+# Selldone Static Storefront and Dashboard
 
-[![GitHub](https://img.shields.io/badge/GitHub-Repository-181717?logo=github&logoColor=white)](https://github.com/pajuhaan/selldone-custom-storefront-backoffice-1)
+A fully static Selldone storefront plus browser-side dashboard for Cloudflare Pages.
 
-Build and self-host a custom storefront and backoffice dashboard on top of Selldone Cloud Commerce.
+Selldone remains the commerce backend. This repository only ships static HTML, CSS, and JavaScript:
 
-This open-source starter is for teams that want full control over their customer-facing storefront, admin UI, hosting, and deployment while keeping the hard commerce infrastructure in Selldone. Deploy it on your own server, connect it to a Selldone shop, and let Selldone handle the commerce engine, including shop data, products, orders, customers, inventory, checkout, payments, and ongoing platform updates.
+- Storefront: `/`
+- Dashboard: `/dashboard/`
+- OAuth callback: `/callback/`
+- Static build output: `dist/`
 
-![Custom Selldone storefront and backoffice preview](docs/images/storefront-backoffice-preview.png)
-![Backoffice dashboard preview](docs/images/dashboard-preview.png)
+There is no production Node server. The local Node script is only a development file server.
 
-## Why Use This
+## Project layout
 
-- Own the UI: customize the storefront and dashboard for your brand, workflow, and market.
-- Deploy anywhere: run the app on your VPS, cloud VM, PaaS, container host, or internal infrastructure.
-- Avoid commerce maintenance: Selldone remains the cloud commerce backend, so you do not have to rebuild or maintain complex commerce functionality.
-- Use live Selldone data: the local server connects the storefront and backoffice dashboard to Selldone APIs.
-- Customize with AI agents: use AI coding agents to adapt the storefront and dashboard to each brand, market, catalog, and operational workflow.
-- Keep credentials safer: dashboard OAuth tokens are never persisted; each browser session must authenticate its own Selldone user, and the direct browser client keeps the access token only in memory.
+- `storefront/` - public storefront source served at `/`
+- `dashboard/` - dashboard source served at `/dashboard/`
+- `callback/` - Selldone OAuth callback page served at `/callback/`
+- `shared/` - shared browser modules used by storefront, dashboard, and callback
+- `scripts/build-static.mjs` - creates Cloudflare Pages output in `dist/`
+- `scripts/dev-static.mjs` - local static file server for development only
+- `.github/workflows/cloudflare-pages.yml` - optional GitHub Actions deploy to Cloudflare Pages
+- `wrangler.toml` - Cloudflare Pages output config
 
-## What Is Included
+## Runtime configuration
 
-- Public storefront served at `/`
-- Custom backoffice dashboard served at `/dashboard/`
-- First-run setup flow served at `/setup/`
-- Local Node server for routing, OAuth, sessions, API proxying, and static serving
-- `.env.example` for distributable configuration
+Public browser-safe configuration is stored in the `<meta>` tags at the top of:
 
-## How It Works
+- `storefront/index.html`
+- `dashboard/index.html`
+- `callback/index.html`
 
-This project is the self-hosted application layer. Selldone stays responsible for the commerce platform.
+Do not put secrets in HTML, JavaScript, docs, or examples. This static app must never contain client secrets, API tokens, refresh tokens, MCP credentials, or private Cloudflare tokens.
 
-- Storefront requests go through the local server and fetch shop/customer-facing commerce data from Selldone.
-- Backoffice requests use Selldone OAuth with PKCE and fetch live management data from `api.selldone.com`.
-- Runtime configuration lives in `.env`.
-- On a fresh installation without a completed `.env`, the server redirects to `/setup/`.
-
-## Selldone MCP and AI Agents
-
-Selldone MCP connections let compatible AI agents work with Selldone-aware tools and context without asking merchants to manually pass around API credentials. Start from the Selldone MCP connections page: [selldone.com/mcp/connections](https://selldone.com/mcp/connections).
-
-With an authorized MCP connection, an AI agent can help turn this starter into a brand-specific commerce application:
-
-- Build or revise storefront sections around a brand's visual identity, catalog structure, content strategy, and customer journey.
-- Create custom backoffice views for the merchant's actual workflows, such as order handling, product operations, customer support, or reporting.
-- Update layouts, copy, components, styles, setup instructions, and integration code directly in this self-hosted project.
-- Use Selldone as the cloud commerce source of truth while the agent focuses on the custom application layer.
-
-MCP is optional. Without it, configure `.env` manually and continue editing the storefront and dashboard like any other Node-based web project.
-
-## Run Locally
+## Local development
 
 ```bash
 npm install
-npm start
+npm run dev:static
+```
+
+Default local URL:
+
+```text
+http://localhost:8788/
+```
+
+For port `5173`:
+
+```powershell
+$env:STATIC_DEV_PORT="5173"
+npm run dev:static
 ```
 
 Open:
 
-- Storefront: `http://localhost:5173/`
-- Dashboard: `http://localhost:5173/dashboard/`
-- Setup: `http://localhost:5173/setup/`
+- `http://localhost:5173/`
+- `http://localhost:5173/dashboard/`
+- `http://localhost:5173/callback/`
 
-## Configuration
+## Static build
 
-For open-source distribution, ship `.env.example` and let each deployment create its own `.env`.
+```bash
+npm run build:static
+```
 
-Manual setup asks for:
+The deployable output is written to `dist/`. Do not commit `dist/`; Cloudflare/GitHub builds it from source.
 
-- `CLIENT_ID`
-- `SHOP_ID`
-- Shop name and domain
-- Storefront handle
-- App base URL
-- OAuth scopes
+## Cloudflare Pages
 
-Automatic setup is supported when a Selldone MCP bridge creates or repairs the shop-bound dashboard OAuth client and returns `client_id` and `shop_id`. A standalone local server cannot call MCP by itself; connect an MCP-compatible agent through [Selldone MCP connections](https://selldone.com/mcp/connections) when agent-assisted setup or customization is needed.
+Cloudflare Pages settings:
 
-## Project Layout
+- Build command: `npm run build:static`
+- Build output directory: `dist`
+- Production domain: `shop.niomatic.com`
+- OAuth callback URL: `https://shop.niomatic.com/callback/`
 
-- `storefront/` - public shop UI served at `/`
-- `dashboard/` - management dashboard served at `/dashboard/`
-- `setup/` - first-run setup UI, `.env` reader/writer, and MCP onboarding instructions
-- `server/` - routing, OAuth, backoffice API bridge, storefront proxy, static serving
-- `docs/images/` - README and documentation images
+The build writes Cloudflare `_redirects` and `_headers` into `dist/` so `/dashboard/`, `/callback/`, and hash routes work as static pages.
 
-## Deployment Notes
+## API model
 
-- Set `APP_BASE_URL` to the public URL of the deployed app.
-- Configure the Selldone OAuth client redirect URL to match the deployed dashboard callback URL.
-- Keep `.env` private and do not commit deployment secrets.
-- Put the Node server behind HTTPS in production.
+- Storefront reads and writes directly to `https://xapi.selldone.com` from the browser.
+- Dashboard/backoffice calls go directly to `https://api.selldone.com` from the browser.
+- OAuth authorize/token calls use `https://selldone.com/oauth` with public-client PKCE.
+- Storefront and dashboard tokens are stored separately in browser localStorage.
+
+## Deploy from GitHub
+
+The included workflow builds `dist/` and deploys it with Wrangler. Required GitHub secrets:
+
+```text
+CLOUDFLARE_ACCOUNT_ID
+CLOUDFLARE_API_TOKEN
+```
+
+Required GitHub variable:
+
+```text
+CLOUDFLARE_PAGES_PROJECT=selldone-shop-a1
+```
+
+See `docs/github-cloudflare-action.md` and `docs/static-cloudflare-pages.md`.

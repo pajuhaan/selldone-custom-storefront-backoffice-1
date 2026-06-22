@@ -1,7 +1,12 @@
 {
   "scripts": {
-    "start": "node server.mjs",
-    "restart": "start-dashboard.cmd"
+    "build": "npm run build:static",
+    "build:static": "node scripts/build-static.mjs",
+    "dev": "npm run dev:static",
+    "dev:static": "node scripts/dev-static.mjs",
+    "preview": "npm run preview:static",
+    "preview:static": "npm run build:static && node scripts/dev-static.mjs --dist",
+    "start": "npm run dev:static"
   },
   "private": true,
   "type": "module"

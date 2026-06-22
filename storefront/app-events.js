@@ -1,5 +1,6 @@
 import * as storefront from "./app-core.js?v=storefront-product-rating-refactor-20260621";
 import { updateProductRatingSubmitState } from "./product-rating.js?v=storefront-product-rating-refactor-20260621";
+import { storefrontAuth } from "/shared/auth-client.js";
 
 const {
   state,
@@ -267,6 +268,14 @@ export function registerStorefrontInteractions() {
       void fetchSessionStatus().then(() => {
         navigateToAccount();
       });
+      return;
+    }
+
+    const accountMenuLogout = event.target.closest(".account-menu-logout");
+    if (accountMenuLogout) {
+      event.preventDefault();
+      closeAccountMenu();
+      storefrontAuth.logout("/");
       return;
     }
 

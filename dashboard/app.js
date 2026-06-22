@@ -3,9 +3,10 @@ import { createMessagesFeature } from "./features/messages.js";
 import { createPaymentFeature } from "./features/payments.js";
 import { createSelldoneDirectClient } from "./features/selldone-direct.js";
 import { resolveSelldoneRecordImage as resolveSelldoneImageRecord } from "./features/selldone-images.js";
+import { dashboardAuth } from "/shared/auth-client.js";
 
 const LOW_STOCK_LIMIT = 8;
-const LOCAL_APP_URL = "http://localhost:5173/dashboard/";
+const LOCAL_APP_URL = getLocalAppUrl();
 const AUTH_REDIRECT_KEY = "pajulina_auth_redirect_started";
 const CONSENT_REDIRECT_KEY = "pajulina_consent_redirect_started";
 const THEME_KEY = "pajulina_dashboard_theme_v2";
@@ -641,6 +642,10 @@ function notify(message) {
 }
 
 async function requestJson(url, options = {}) {
+  if (url === "/api/session" || url === "/api/dashboard/session") {
+    return dashboardAuth.session();
+  }
+
   const response = await fetch(url, {
     credentials: "same-origin",
     headers: { Accept: "application/json", ...(options.headers || {}) },
@@ -686,6 +691,7 @@ async function loadSession() {
   }
 
   sessionStorage.removeItem(AUTH_REDIRECT_KEY);
+  els.loginButton.href = await dashboardAuth.buildLoginUrl("/dashboard/#overview");
   els.authGate.classList.add("d-none");
   els.appShell.classList.remove("d-none");
   try {
@@ -732,6 +738,12 @@ function showFileModeNotice() {
 
   const paragraph = els.authGate.querySelector(".auth-card p");
   paragraph.textContent = "This dashboard needs the local server for OAuth callback, Bootstrap assets, and live Selldone API data.";
+}
+
+function getLocalAppUrl() {
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const base = String(origin || "").replace(/^null$/i, "").replace(/\/$/, "");
+  return base ? `${base}/dashboard/` : "/dashboard/";
 }
 
 function renderShell(shop, user) {
@@ -3979,6 +3991,15 @@ const paymentFeature = createPaymentFeature({
 });
 
 function bindEvents() {
+  els.loginButton?.addEventListener("click", async (event) => {
+    event.preventDefault();
+    window.location.assign(await dashboardAuth.buildLoginUrl("/dashboard/#overview"));
+  });
+  document.getElementById("logoutButton")?.addEventListener("click", (event) => {
+    event.preventDefault();
+    dashboardAuth.logout("/dashboard/");
+  });
+
   els.refreshButton.addEventListener("click", loadDashboard);
   els.refreshNotificationsButton?.addEventListener("click", () => refreshNotifications());
   els.refreshNotificationsMenuButton?.addEventListener("click", () => refreshNotifications());
@@ -4072,6 +4093,13 @@ function bindEvents() {
   });
 
   document.addEventListener("click", (event) => {
+    const dashboardLogin = event.target.closest("[data-dashboard-login]");
+    if (dashboardLogin) {
+      event.preventDefault();
+      dashboardAuth.buildLoginUrl("/dashboard/#overview").then((loginUrl) => window.location.assign(loginUrl));
+      return;
+    }
+
     const articleEdit = event.target.closest("[data-article-edit]");
     if (articleEdit) {
       closeArticleMenus();

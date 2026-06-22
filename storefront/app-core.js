@@ -12,6 +12,7 @@ import { renderOrderHistoryPage } from "./order-history.js?v=storefront-product-
 import { renderOrderDetailPage } from "./order-detail.js?v=storefront-product-article-wide-20260621";
 import { createStorefrontPayments } from "./payments.js?v=storefront-product-article-wide-20260621";
 import { createStorefrontQuickBuy } from "./quick-buy.js?v=storefront-product-article-wide-20260621";
+import { storefrontAuth } from "/shared/auth-client.js";
 
 const SPRITE_COLUMNS = 4;
 const SPRITE_ROWS = 4;
@@ -3192,6 +3193,7 @@ function buildAccountLoginUrl(nextRoute = "") {
   try {
     const target = new URL(loginUrl, window.location.origin);
     target.searchParams.set("next", loginReturnRoute);
+    if (target.origin !== window.location.origin) return target.toString();
     return `${target.pathname}${target.search}${target.hash}`;
   } catch {
     return `${loginUrl}${loginUrl.includes("?") ? "&" : "?"}next=${encodeURIComponent(loginReturnRoute)}`;
@@ -3199,14 +3201,7 @@ function buildAccountLoginUrl(nextRoute = "") {
 }
 
 function buildAccountLogoutUrl() {
-  const logoutReturnRoute = `${window.location.pathname}${window.location.search || ""}${window.location.hash || ""}`;
-  try {
-    const target = new URL("/auth/storefront/logout", window.location.origin);
-    target.searchParams.set("next", logoutReturnRoute);
-    return `${target.pathname}${target.search}`;
-  } catch {
-    return `/auth/storefront/logout?next=${encodeURIComponent(logoutReturnRoute)}`;
-  }
+  return "#logout-storefront";
 }
 
 function renderAccountMenu() {
@@ -5942,7 +5937,7 @@ function navigateToAccount(nextRoute = "") {
     setHash("account");
     return;
   }
-  window.location.assign(buildAccountLoginUrl(nextRoute));
+  void storefrontAuth.buildLoginUrl(storefrontReturnRoute(nextRoute)).then((loginUrl) => window.location.assign(loginUrl));
 }
 
 function updateAccountButton() {
