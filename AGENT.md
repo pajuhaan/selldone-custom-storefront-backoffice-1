@@ -10,7 +10,7 @@ This project is a fully static Selldone storefront plus browser-side dashboard. 
 - Shared browser modules live in `shared/`.
 - Static production output is generated into `dist/` by `scripts/build-static.mjs`.
 - `scripts/dev-static.mjs` is only a local development file server. Do not add production Node server behavior.
-- Cloudflare Pages must deploy `dist/` only. Do not deploy `.env`, logs, temp files, auth files, local browser profiles, or `dist/` source artifacts to git.
+- Cloudflare Workers Static Assets must deploy `dist/` only through `wrangler deploy`. Do not deploy `.env`, logs, temp files, auth files, local browser profiles, or `dist/` source artifacts to git.
 
 ## Runtime Config
 

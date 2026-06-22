@@ -1,4 +1,4 @@
-name: Deploy Cloudflare Pages
+name: Deploy Cloudflare Worker
 
 on:
   push:
@@ -17,12 +17,11 @@ concurrency:
 
 jobs:
   deploy:
-    name: Build static site and deploy
+    name: Build static site and deploy worker assets
     runs-on: ubuntu-latest
     env:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      CLOUDFLARE_PAGES_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT || 'selldone-shop-a1' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,5 +38,5 @@ jobs:
       - name: Build static output
         run: npm run build:static
 
-      - name: Deploy to Cloudflare Pages
-        run: npx wrangler@latest pages deploy dist --project-name "$CLOUDFLARE_PAGES_PROJECT" --branch "$GITHUB_REF_NAME" --commit-hash "$GITHUB_SHA"
+      - name: Deploy to Cloudflare Workers
+        run: npx wrangler@latest deploy

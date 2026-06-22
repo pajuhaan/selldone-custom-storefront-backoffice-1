@@ -1,4 +1,4 @@
-# GitHub to Cloudflare Pages deployment
+# GitHub to Cloudflare Workers deployment
 
 This repository includes `.github/workflows/cloudflare-pages.yml`.
 
@@ -8,7 +8,7 @@ It builds the static package with:
 npm run build:static
 ```
 
-Then deploys `dist/` to Cloudflare Pages with Wrangler.
+Then deploys `dist/` as Cloudflare Workers Static Assets with Wrangler.
 
 ## Required GitHub secrets
 
@@ -20,12 +20,6 @@ CLOUDFLARE_API_TOKEN
 ```
 
 The API token must be allowed to deploy Cloudflare Pages for the target account.
-
-## Required GitHub variable
-
-```text
-CLOUDFLARE_PAGES_PROJECT=selldone-shop-a1
-```
 
 ## App configuration
 
@@ -43,7 +37,7 @@ Do not add client secrets, refresh tokens, API keys, MCP credentials, or private
 
 ## Custom domain
 
-After the first successful Pages deployment, add `shop.niomatic.com` as a custom domain on the Cloudflare Pages project.
+After the first successful Worker deployment, add `shop.niomatic.com` as a custom domain or route for the Worker.
 
 For this app, the Selldone OAuth redirect URI should be:
 

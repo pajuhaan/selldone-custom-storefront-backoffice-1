@@ -1,6 +1,6 @@
 # Selldone Static Storefront and Dashboard
 
-A fully static Selldone storefront plus browser-side dashboard for Cloudflare Pages.
+A fully static Selldone storefront plus browser-side dashboard for Cloudflare Workers Static Assets.
 
 Selldone remains the commerce backend. This repository only ships static HTML, CSS, and JavaScript:
 
@@ -20,7 +20,7 @@ There is no production Node server. The local Node script is only a development 
 - `scripts/build-static.mjs` - creates Cloudflare Pages output in `dist/`
 - `scripts/dev-static.mjs` - local static file server for development only
 - `.github/workflows/cloudflare-pages.yml` - optional GitHub Actions deploy to Cloudflare Pages
-- `wrangler.toml` - Cloudflare Pages output config
+- `wrangler.toml` - Cloudflare Workers Static Assets config
 
 ## Runtime configuration
 
@@ -66,16 +66,18 @@ npm run build:static
 
 The deployable output is written to `dist/`. Do not commit `dist/`; Cloudflare/GitHub builds it from source.
 
-## Cloudflare Pages
+## Cloudflare Workers
 
-Cloudflare Pages settings:
+Cloudflare Workers Builds settings:
 
 - Build command: `npm run build:static`
-- Build output directory: `dist`
+- Deploy command: `npx wrangler deploy`
+- Non-production branch deploy command: `npx wrangler versions upload`
+- Path: `/`
 - Production domain: `shop.niomatic.com`
 - OAuth callback URL: `https://shop.niomatic.com/callback/`
 
-The build writes Cloudflare `_redirects` and `_headers` into `dist/` so `/dashboard/`, `/callback/`, and hash routes work as static pages.
+`wrangler.toml` deploys `dist/` with Workers Static Assets. `/dashboard/` and `/callback/` are real directory index pages, and unknown client routes fall back to the SPA shell.
 
 ## API model
 
@@ -86,7 +88,7 @@ The build writes Cloudflare `_redirects` and `_headers` into `dist/` so `/dashbo
 
 ## Deploy from GitHub
 
-The included workflow builds `dist/` and deploys it with Wrangler. Required GitHub secrets:
+The included workflow builds `dist/` and deploys the Worker with Wrangler. Required GitHub secrets:
 
 ```text
 CLOUDFLARE_ACCOUNT_ID

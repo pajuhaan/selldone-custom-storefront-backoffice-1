@@ -4,6 +4,9 @@
     "build:static": "node scripts/build-static.mjs",
     "dev": "npm run dev:static",
     "dev:static": "node scripts/dev-static.mjs",
+    "deploy": "npx wrangler deploy",
+    "deploy:worker": "npx wrangler deploy",
+    "deploy:worker-version": "npx wrangler versions upload",
     "preview": "npm run preview:static",
     "preview:static": "npm run build:static && node scripts/dev-static.mjs --dist",
     "start": "npm run dev:static"

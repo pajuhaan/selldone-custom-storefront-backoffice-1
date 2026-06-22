@@ -1,11 +1,13 @@
-# Static Cloudflare Pages Deployment
+# Static Cloudflare Workers Deployment
 
-This package deploys as static assets only. No Node server, tunnel, Cloudflare Worker, or Pages Function is required for production.
+This package deploys as static assets on Cloudflare Workers. No Node server or tunnel is required for production.
 
-Cloudflare Pages settings:
+Cloudflare Workers Builds settings:
 
 - Build command: `npm run build:static`
-- Build output directory: `dist`
+- Deploy command: `npx wrangler deploy`
+- Non-production branch deploy command: `npx wrangler versions upload`
+- Path: `/`
 - Production domain: `shop.niomatic.com`
 - OAuth callback URL: `https://shop.niomatic.com/callback/`
 
@@ -29,8 +31,7 @@ Never add client secrets, private API keys, access tokens, refresh tokens, MCP c
 - `dist/dashboard/index.html` for the dashboard
 - `dist/callback/index.html` for OAuth callback handling
 - `dist/shared/*` for shared browser modules
-- `dist/_redirects` for static route rewrites
-- `dist/_headers` for production headers
+`wrangler.toml` points Workers Static Assets at `./dist/` and uses `not_found_handling = "single-page-application"` for client-side routes.
 
 ## Local development
 
